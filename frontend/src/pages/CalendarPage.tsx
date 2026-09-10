@@ -1,17 +1,29 @@
-import { Badge, Button, Group, Select, Stack, Text, Title, Tooltip } from '@mantine/core'
-import { DateInput } from '@mantine/dates'
+import { Badge, Button, Group, Modal, Select, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core'
+import { DateInput, DateTimePicker } from '@mantine/dates'
+import { useForm } from '@mantine/form'
+import { notifications } from '@mantine/notifications'
 import { IconAlertTriangle } from '@tabler/icons-react'
 import dayjs, { type Dayjs } from 'dayjs'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { apiErrorMessage } from '../api/client'
 import { listCalendarWorks } from '../api/calendar'
-import type { CalendarWorkItem, User } from '../api/types'
+import { listClients } from '../api/clients'
+import { addWork, createTask } from '../api/tasks'
+import type { CalendarWorkItem, Client, User } from '../api/types'
 import { listUsers } from '../api/users'
+import { ClientPicker } from '../components/ClientPicker'
 import { useAuth } from '../context/AuthContext'
 
 const PX_PER_HOUR = 56
 const MIN_RANGE_HOURS = 10
 const DEFAULT_RANGE = { startHour: 8, endHour: 20 }
+const SNAP_MINUTES = 15
+const CLICK_THRESHOLD_PX = 6
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v))
+}
 
 interface LaidOutWork {
   work: CalendarWorkItem
@@ -66,11 +78,17 @@ function layoutDay(works: CalendarWorkItem[]): LaidOutWork[] {
   return result
 }
 
+interface PendingRange {
+  start: Date
+  end: Date
+}
+
 export function CalendarPage() {
   const { isAdmin } = useAuth()
   const navigate = useNavigate()
   const [weekStart, setWeekStart] = useState<Date>(dayjs().startOf('week').toDate())
   const [users, setUsers] = useState<User[]>([])
+  const [clients, setClients] = useState<Client[]>([])
   const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [works, setWorks] = useState<CalendarWorkItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -79,7 +97,10 @@ export function CalendarPage() {
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => dayjs(weekStart).add(i, 'day')), [weekStart])
 
   useEffect(() => {
-    if (isAdmin) listUsers().then(setUsers)
+    if (isAdmin) {
+      listUsers().then(setUsers)
+      listClients().then(setClients)
+    }
   }, [isAdmin])
 
   useEffect(() => {
@@ -127,6 +148,72 @@ export function CalendarPage() {
     return Math.max(0, Math.min(rangeHours, hours)) * PX_PER_HOUR
   }
 
+  function pxToTime(day: Dayjs, y: number): Dayjs {
+    const rawMinutes = (y / PX_PER_HOUR) * 60
+    const snapped = Math.round(rawMinutes / SNAP_MINUTES) * SNAP_MINUTES
+    return day.hour(range.startHour).minute(0).second(0).millisecond(0).add(snapped, 'minute')
+  }
+
+  // ---- Drag-to-create-task ----
+  // dragRef holds the non-reactive per-drag data (which day/container the
+  // drag started in); `selection` mirrors just the visible box and is the
+  // only thing that changes on every mousemove, so the window listener
+  // effect (keyed on `isSelecting`) doesn't get torn down and rebuilt on
+  // every pixel of movement.
+  const dragRef = useRef<{ day: Dayjs; dayKey: string; container: HTMLDivElement; startY: number } | null>(null)
+  const [isSelecting, setIsSelecting] = useState(false)
+  const [selection, setSelection] = useState<{ dayKey: string; top: number; bottom: number } | null>(null)
+  const [pendingRange, setPendingRange] = useState<PendingRange | null>(null)
+
+  function handleGridMouseDown(e: React.MouseEvent<HTMLDivElement>, day: Dayjs, dayKey: string) {
+    if (!isAdmin) return
+    const container = e.currentTarget
+    const rect = container.getBoundingClientRect()
+    const y = clamp(e.clientY - rect.top, 0, gridHeight)
+    dragRef.current = { day, dayKey, container, startY: y }
+    setSelection({ dayKey, top: y, bottom: y })
+    setIsSelecting(true)
+  }
+
+  useEffect(() => {
+    if (!isSelecting) return
+
+    function onMove(e: MouseEvent) {
+      const info = dragRef.current
+      if (!info) return
+      const rect = info.container.getBoundingClientRect()
+      const y = clamp(e.clientY - rect.top, 0, gridHeight)
+      setSelection({ dayKey: info.dayKey, top: Math.min(info.startY, y), bottom: Math.max(info.startY, y) })
+    }
+
+    function onUp(e: MouseEvent) {
+      const info = dragRef.current
+      if (info) {
+        const rect = info.container.getBoundingClientRect()
+        const endY = clamp(e.clientY - rect.top, 0, gridHeight)
+        let top = Math.min(info.startY, endY)
+        let bottom = Math.max(info.startY, endY)
+        if (bottom - top < CLICK_THRESHOLD_PX) {
+          // a plain click (no real drag) — default to a 1-hour slot
+          bottom = Math.min(gridHeight, top + PX_PER_HOUR)
+          top = Math.max(0, bottom - PX_PER_HOUR)
+        }
+        setPendingRange({ start: pxToTime(info.day, top).toDate(), end: pxToTime(info.day, bottom).toDate() })
+      }
+      dragRef.current = null
+      setSelection(null)
+      setIsSelecting(false)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSelecting, gridHeight])
+
   const hasConflicts = works.some((w) => w.has_conflict)
   const today = dayjs().format('YYYY-MM-DD')
 
@@ -170,6 +257,12 @@ export function CalendarPage() {
         </Group>
       )}
 
+      {isAdmin && (
+        <Text size="xs" c="dimmed">
+          Выделите время в свободной ячейке дня, чтобы создать новую задачу с работой на это время.
+        </Text>
+      )}
+
       <div style={{ display: 'flex', border: '1px solid var(--mantine-color-gray-3)', borderRadius: 8, overflow: 'hidden' }}>
         {/* time axis */}
         <div style={{ width: 56, flexShrink: 0, borderRight: '1px solid var(--mantine-color-gray-3)' }}>
@@ -189,12 +282,13 @@ export function CalendarPage() {
         </div>
 
         {/* day columns */}
-        <div style={{ display: 'flex', flex: 1, overflowX: 'auto' }}>
+        <div style={{ display: 'flex', flex: 1, overflowX: 'auto', userSelect: isSelecting ? 'none' : undefined }}>
           {days.map((day) => {
             const key = day.format('YYYY-MM-DD')
             const dayWorks = worksByDay.get(key) ?? []
             const laidOut = layoutDay(dayWorks)
             const isToday = key === today
+            const daySelection = selection?.dayKey === key ? selection : null
 
             return (
               <div
@@ -224,7 +318,10 @@ export function CalendarPage() {
                   </Text>
                 </div>
 
-                <div style={{ position: 'relative', height: gridHeight }}>
+                <div
+                  style={{ position: 'relative', height: gridHeight, cursor: isAdmin ? 'crosshair' : 'default' }}
+                  onMouseDown={(e) => handleGridMouseDown(e, day, key)}
+                >
                   {hourMarks.slice(0, -1).map((h) => (
                     <div
                       key={h}
@@ -237,6 +334,22 @@ export function CalendarPage() {
                       }}
                     />
                   ))}
+
+                  {daySelection && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: daySelection.top,
+                        height: Math.max(daySelection.bottom - daySelection.top, 2),
+                        left: 2,
+                        right: 2,
+                        background: 'var(--mantine-color-teal-2)',
+                        border: '1px dashed var(--mantine-color-teal-6)',
+                        borderRadius: 4,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  )}
 
                   {laidOut.map(({ work, column, totalColumns }) => {
                     const top = timeToPx(work.planned_start, day)
@@ -251,6 +364,7 @@ export function CalendarPage() {
                         w={240}
                       >
                         <div
+                          onMouseDown={(e) => e.stopPropagation()}
                           onClick={() => navigate(`/tasks/${work.task.id}`)}
                           style={{
                             position: 'absolute',
@@ -309,6 +423,114 @@ export function CalendarPage() {
           </Text>
         </Group>
       </Group>
+
+      {pendingRange && (
+        <CreateTaskFromSlotModal
+          range={pendingRange}
+          clients={clients}
+          onClientCreated={(client) => setClients((prev) => [...prev, client])}
+          defaultAssigneeId={employeeId}
+          onClose={() => setPendingRange(null)}
+          onCreated={(taskId) => {
+            setPendingRange(null)
+            navigate(`/tasks/${taskId}`)
+          }}
+        />
+      )}
     </Stack>
+  )
+}
+
+// ---- New task + first work, created from a calendar time selection ----
+
+function CreateTaskFromSlotModal({
+  range,
+  clients,
+  onClientCreated,
+  defaultAssigneeId,
+  onClose,
+  onCreated,
+}: {
+  range: PendingRange
+  clients: Client[]
+  onClientCreated: (client: Client) => void
+  defaultAssigneeId: string | null
+  onClose: () => void
+  onCreated: (taskId: number) => void
+}) {
+  const [submitting, setSubmitting] = useState(false)
+  const form = useForm({
+    initialValues: {
+      client_id: '',
+      title: '',
+      work_description: '',
+      planned_start: range.start,
+      planned_end: range.end,
+    },
+  })
+
+  async function handleSubmit(values: typeof form.values) {
+    if (!values.client_id) {
+      form.setFieldError('client_id', 'Выберите клиента')
+      return
+    }
+    if (values.planned_end <= values.planned_start) {
+      form.setFieldError('planned_end', 'Окончание должно быть позже начала')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const task = await createTask({ client_id: Number(values.client_id), title: values.title })
+      await addWork(task.id, {
+        catalog_item_id: null,
+        description: values.work_description,
+        service_price: '0',
+        planned_start: values.planned_start.toISOString(),
+        planned_end: values.planned_end.toISOString(),
+        status: 'planned',
+        assignee_id: defaultAssigneeId ? Number(defaultAssigneeId) : null,
+      })
+      onCreated(task.id)
+    } catch (e) {
+      notifications.show({ color: 'red', message: apiErrorMessage(e, 'Не удалось создать задачу') })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal opened onClose={onClose} title="Новая задача" size="md">
+      <form onSubmit={form.onSubmit(handleSubmit)}>
+        <Stack>
+          <ClientPicker
+            clients={clients}
+            value={form.values.client_id}
+            onChange={(v) => form.setFieldValue('client_id', v ?? '')}
+            onClientCreated={onClientCreated}
+            required
+            error={form.errors.client_id}
+          />
+          <TextInput label="Название задачи" required {...form.getInputProps('title')} />
+          <TextInput label="Описание работы" required {...form.getInputProps('work_description')} />
+          <Group grow>
+            <DateTimePicker
+              label="Начало"
+              required
+              valueFormat="DD.MM.YYYY HH:mm"
+              {...form.getInputProps('planned_start')}
+            />
+            <DateTimePicker
+              label="Окончание"
+              required
+              valueFormat="DD.MM.YYYY HH:mm"
+              {...form.getInputProps('planned_end')}
+            />
+          </Group>
+          <Button type="submit" loading={submitting}>
+            Создать
+          </Button>
+        </Stack>
+      </form>
+    </Modal>
   )
 }

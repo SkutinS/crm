@@ -1,9 +1,9 @@
-from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.client import ClientOut
+from app.schemas.common import UtcDateTime
 from app.schemas.money_item import MoneyItemOut
 from app.schemas.part import PartOut
 from app.schemas.participation import ParticipationOut
@@ -49,7 +49,7 @@ class TaskListItem(BaseModel):
 
     id: int
     title: str
-    created_at: datetime
+    created_at: UtcDateTime
     client: ClientOut
     stage: TaskStageOut
     assignments: list[TaskAssignmentOut]
@@ -61,7 +61,7 @@ class TaskDetail(BaseModel):
     id: int
     title: str
     description: str | None
-    created_at: datetime
+    created_at: UtcDateTime
     client: ClientOut
     stage: TaskStageOut
     assignments: list[TaskAssignmentOut]

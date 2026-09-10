@@ -11,6 +11,7 @@ from app.core.time_utils import to_naive_utc
 from app.models.enums import UserRole
 from app.models.task import Task
 from app.models.work import Work
+from app.schemas.common import UtcDateTime
 from app.services.calendar import find_conflicting_work_ids
 
 router = APIRouter(prefix="/api/calendar", tags=["calendar"])
@@ -28,8 +29,8 @@ class CalendarWorkItem(BaseModel):
 
     id: int
     description: str
-    planned_start: datetime
-    planned_end: datetime
+    planned_start: UtcDateTime
+    planned_end: UtcDateTime
     status: str
     assignee_id: int | None
     assignee_name: str | None

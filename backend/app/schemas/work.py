@@ -4,6 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import WorkStatus
+from app.schemas.common import UtcDateTime
 
 
 class WorkBase(BaseModel):
@@ -35,3 +36,5 @@ class WorkOut(WorkBase):
 
     id: int
     task_id: int
+    planned_start: UtcDateTime
+    planned_end: UtcDateTime

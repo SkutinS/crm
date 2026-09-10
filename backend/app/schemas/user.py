@@ -1,9 +1,9 @@
-from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import RateType, UserRole
+from app.schemas.common import UtcDateTime
 
 
 class UserBase(BaseModel):
@@ -39,4 +39,4 @@ class UserOut(BaseModel):
     rate_type: RateType
     rate_amount: Decimal
     is_active: bool
-    created_at: datetime
+    created_at: UtcDateTime

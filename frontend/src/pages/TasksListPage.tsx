@@ -12,6 +12,7 @@ import { changeTaskStage, createTask, listTasks } from '../api/tasks'
 import type { Client, TaskListItem, TaskStage } from '../api/types'
 import { listUsers } from '../api/users'
 import type { User } from '../api/types'
+import { ClientPicker } from '../components/ClientPicker'
 import { StageSelect } from '../components/StageSelect'
 import { useAuth } from '../context/AuthContext'
 
@@ -187,13 +188,13 @@ export function TasksListPage() {
       <Modal opened={opened} onClose={close} title="Новая задача" size="lg">
         <form onSubmit={form.onSubmit(handleCreate)}>
           <Stack>
-            <Select
-              label="Клиент"
-              placeholder="Выберите клиента"
-              data={clients.map((c) => ({ value: String(c.id), label: c.name }))}
-              searchable
+            <ClientPicker
+              clients={clients}
+              value={form.values.client_id}
+              onChange={(v) => form.setFieldValue('client_id', v)}
+              onClientCreated={(client) => setClients((prev) => [...prev, client])}
               required
-              {...form.getInputProps('client_id')}
+              error={form.errors.client_id}
             />
             <TextInput label="Название/описание задачи" required {...form.getInputProps('title')} />
             <Textarea label="Подробное описание" {...form.getInputProps('description')} />
