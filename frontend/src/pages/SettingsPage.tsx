@@ -30,7 +30,7 @@ export function SettingsPage() {
     <Stack maw={480}>
       <Title order={2}>Настройки</Title>
 
-      <Card withBorder>
+      <Card shadow="sm" radius="md">
         <Text fw={600} mb="xs">
           Оформление
         </Text>
@@ -48,7 +48,7 @@ export function SettingsPage() {
         />
       </Card>
 
-      <Card withBorder>
+      <Card shadow="sm" radius="md">
         <Text fw={600} mb="xs">
           Валюта учёта
         </Text>

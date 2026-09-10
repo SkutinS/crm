@@ -61,7 +61,11 @@ export function Layout({ children }: { children: ReactNode }) {
         ))}
       </AppShell.Navbar>
 
-      <AppShell.Main>{children}</AppShell.Main>
+      <AppShell.Main
+        style={{ background: 'light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8))' }}
+      >
+        {children}
+      </AppShell.Main>
     </AppShell>
   )
 }

@@ -172,7 +172,7 @@ export function TaskDetailPage() {
 
       <SimpleGrid cols={{ base: 1, sm: 2 }}>
         <TaskInfoCard task={task} isAdmin={isAdmin} onSaved={setTask} />
-        <Card withBorder>
+        <Card shadow="sm" radius="md">
           <Text size="sm" c="dimmed" mb="xs">
             Финансы по задаче
           </Text>
@@ -276,7 +276,7 @@ function TaskInfoCard({
   }
 
   return (
-    <Card withBorder>
+    <Card shadow="sm" radius="md">
       <Group justify="space-between" mb="xs">
         <Text size="sm" c="dimmed">
           Описание
@@ -340,7 +340,7 @@ function AssignmentsSection({
   }
 
   return (
-    <Card withBorder>
+    <Card shadow="sm" radius="md">
       <Group justify="space-between" mb="xs">
         <Text fw={600}>Участники</Text>
         {isAdmin && (
@@ -504,7 +504,7 @@ function WorksSection({
   const totalServicePrice = works.reduce((sum, w) => sum + Number(w.service_price), 0)
 
   return (
-    <Card withBorder>
+    <Card shadow="sm" radius="md">
       <Group justify="space-between" mb="xs">
         <Text fw={600}>Работы</Text>
         <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={openCreate}>
@@ -675,7 +675,7 @@ function PartsSection({
   const totalMargin = parts.reduce((sum, p) => sum + Number(p.margin), 0)
 
   return (
-    <Card withBorder>
+    <Card shadow="sm" radius="md">
       <Group justify="space-between" mb="xs">
         <Text fw={600}>Запчасти</Text>
         <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={openCreate}>
@@ -813,7 +813,7 @@ function MoneyItemsSection({
   const total = items.reduce((sum, i) => sum + Number(i.amount), 0)
 
   return (
-    <Card withBorder>
+    <Card shadow="sm" radius="md">
       <Group justify="space-between" mb={hint ? 0 : 'xs'}>
         <Text fw={600}>{title}</Text>
         {isAdmin && (
@@ -966,7 +966,7 @@ function ParticipationsSection({
   const total = participations.reduce((sum, p) => sum + Number(p.amount), 0)
 
   return (
-    <Card withBorder>
+    <Card shadow="sm" radius="md">
       <Group justify="space-between" mb="xs">
         <Text fw={600}>Зарплата по задаче</Text>
         {isAdmin && (
