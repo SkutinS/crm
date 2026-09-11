@@ -67,10 +67,10 @@ def list_calendar_works(
     visible = all_works
     if start is not None:
         start = to_naive_utc(start)
-        visible = [w for w in visible if w.planned_end > start]
+        visible = [w for w in visible if to_naive_utc(w.planned_end) > start]
     if end is not None:
         end = to_naive_utc(end)
-        visible = [w for w in visible if w.planned_start < end]
+        visible = [w for w in visible if to_naive_utc(w.planned_start) < end]
 
     return [
         CalendarWorkItem(
