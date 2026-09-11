@@ -3,9 +3,17 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react'
-import { useState } from 'react'
+import { useState, type FocusEvent } from 'react'
 import { apiErrorMessage } from '../api/client'
 import { descendantIds, flattenTree } from '../utils/catalogTree'
+
+// Mantine's NumberInput keeps the initial 0 in place and inserts typed
+// digits next to it instead of replacing it. Selecting the whole value on
+// focus makes the first keystroke overwrite it, like a normal spreadsheet
+// cell.
+function selectOnFocus(e: FocusEvent<HTMLInputElement>) {
+  e.currentTarget.select()
+}
 
 interface CatalogNode {
   id: number
@@ -150,7 +158,14 @@ export function CatalogTreeEditor<T extends CatalogNode>({
               {...form.getInputProps('parent_id')}
             />
             {priceFields.map((f) => (
-              <NumberInput key={f.key} label={f.label} min={0} decimalScale={2} {...form.getInputProps(f.key)} />
+              <NumberInput
+                key={f.key}
+                label={f.label}
+                min={0}
+                decimalScale={2}
+                onFocus={selectOnFocus}
+                {...form.getInputProps(f.key)}
+              />
             ))}
             <Button type="submit">Сохранить</Button>
           </Stack>

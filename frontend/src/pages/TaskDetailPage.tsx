@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Card,
+  Collapse,
   Group,
   Loader,
   Modal,
@@ -21,8 +22,8 @@ import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react'
-import { useEffect, useState } from 'react'
+import { IconChevronDown, IconChevronUp, IconEdit, IconPlus, IconTrash } from '@tabler/icons-react'
+import { useEffect, useState, type FocusEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiErrorMessage } from '../api/client'
 import { listPartCatalog, listServiceCatalog } from '../api/catalog'
@@ -50,6 +51,8 @@ import {
   updatePart,
   updateTask,
   updateWork,
+  type PartPayload,
+  type WorkPayload,
 } from '../api/tasks'
 import type {
   MoneyItem,
@@ -67,6 +70,85 @@ import { CatalogPicker } from '../components/CatalogPicker'
 import { StageSelect } from '../components/StageSelect'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
+
+// Mantine's NumberInput keeps the initial 0 in place and inserts typed
+// digits next to it instead of replacing it. Selecting the whole value on
+// focus makes the first keystroke overwrite it, like a normal spreadsheet
+// cell.
+function selectOnFocus(e: FocusEvent<HTMLInputElement>) {
+  e.currentTarget.select()
+}
+
+// ---- Inline-editable table cells (Works/Parts rows are edited directly in
+// the table instead of through a separate form) ----
+
+function InlineTextCell({
+  value,
+  onCommit,
+  width,
+  size = 'xs',
+  fw,
+}: {
+  value: string
+  onCommit: (value: string) => void
+  width?: number
+  size?: string
+  fw?: number
+}) {
+  const [local, setLocal] = useState(value)
+  useEffect(() => setLocal(value), [value])
+
+  return (
+    <TextInput
+      size={size}
+      fw={fw}
+      w={width}
+      value={local}
+      onChange={(e) => setLocal(e.currentTarget.value)}
+      onBlur={() => {
+        const next = local.trim()
+        if (!next) {
+          setLocal(value)
+          return
+        }
+        if (next !== value) onCommit(next)
+        else setLocal(next)
+      }}
+    />
+  )
+}
+
+function InlineNumberCell({
+  value,
+  onCommit,
+  decimalScale = 2,
+  width = 110,
+}: {
+  value: number
+  onCommit: (value: number) => void
+  decimalScale?: number
+  width?: number
+}) {
+  const [local, setLocal] = useState<number | ''>(value)
+  useEffect(() => setLocal(value), [value])
+
+  return (
+    <NumberInput
+      size="xs"
+      w={width}
+      hideControls
+      min={0}
+      decimalScale={decimalScale}
+      value={local}
+      onChange={(v) => setLocal(v === '' ? '' : Number(v))}
+      onFocus={selectOnFocus}
+      onBlur={() => {
+        const next = local === '' ? 0 : local
+        if (next !== value) onCommit(next)
+      }}
+    />
+  )
+}
 
 function FinanceStat({
   label,
@@ -104,6 +186,7 @@ export function TaskDetailPage() {
   const [serviceCatalog, setServiceCatalog] = useState<ServiceCatalogItem[]>([])
   const [partCatalog, setPartCatalog] = useState<PartCatalogItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [financeOpened, { toggle: toggleFinance }] = useDisclosure(false)
 
   function refresh() {
     return getTask(taskId).then(setTask)
@@ -141,6 +224,15 @@ export function TaskDetailPage() {
     }
   }
 
+  async function saveTitle(title: string) {
+    try {
+      const updated = await updateTask(taskId, { title })
+      setTask(updated)
+    } catch (e) {
+      notifications.show({ color: 'red', message: apiErrorMessage(e, 'Не удалось сохранить название') })
+    }
+  }
+
   if (loading || !task) {
     return (
       <Center h={300}>
@@ -154,11 +246,15 @@ export function TaskDetailPage() {
   return (
     <Stack>
       <Group justify="space-between" align="flex-start">
-        <Stack gap={4}>
+        <Stack gap={4} style={{ flex: 1 }}>
           <Text c="dimmed" size="sm">
             {task.client.name}
           </Text>
-          <Title order={2}>{task.title}</Title>
+          {isAdmin ? (
+            <InlineTextCell value={task.title} onCommit={saveTitle} size="lg" fw={700} width={420} />
+          ) : (
+            <Title order={2}>{task.title}</Title>
+          )}
         </Stack>
         <Group>
           <StageSelect stages={stages} value={task.stage.id} onChange={handleStageChange} />
@@ -173,29 +269,40 @@ export function TaskDetailPage() {
       <SimpleGrid cols={{ base: 1, sm: 2 }}>
         <TaskInfoCard task={task} isAdmin={isAdmin} onSaved={setTask} />
         <Card shadow="sm" radius="md">
-          <Text size="sm" c="dimmed" mb="xs">
-            Финансы по задаче
-          </Text>
-          <SimpleGrid cols={2} spacing="xs">
-            <FinanceStat label="К оплате" value={task.invoice_total} formatMoney={formatMoney} />
-            <FinanceStat label="Оплачено" value={String(paymentsTotal)} formatMoney={formatMoney} />
-            <FinanceStat
-              label="Задолженность"
-              value={task.debt}
-              formatMoney={formatMoney}
-              color={Number(task.debt) > 0 ? 'red' : 'teal'}
-            />
-            <FinanceStat
-              label="Прибыль"
-              value={task.profit}
-              formatMoney={formatMoney}
-              color={Number(task.profit) >= 0 ? 'teal' : 'red'}
-            />
-          </SimpleGrid>
-          <Text size="xs" c="dimmed" mt={8}>
-            К оплате = стоимость работ + сумма запчастей. Задолженность = к оплате − оплачено.
-            Прибыль = стоимость работ + маржа по запчастям − расходы − зарплаты.
-          </Text>
+          <Group justify="space-between" mb={financeOpened ? 'xs' : 0}>
+            <Text size="sm" c="dimmed">
+              Финансы по задаче
+            </Text>
+            <ActionIcon
+              variant="subtle"
+              onClick={toggleFinance}
+              aria-label={financeOpened ? 'Свернуть' : 'Развернуть'}
+            >
+              {financeOpened ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+            </ActionIcon>
+          </Group>
+          <Collapse in={financeOpened}>
+            <SimpleGrid cols={2} spacing="xs">
+              <FinanceStat label="К оплате" value={task.invoice_total} formatMoney={formatMoney} />
+              <FinanceStat label="Оплачено" value={String(paymentsTotal)} formatMoney={formatMoney} />
+              <FinanceStat
+                label="Задолженность"
+                value={task.debt}
+                formatMoney={formatMoney}
+                color={Number(task.debt) > 0 ? 'red' : 'teal'}
+              />
+              <FinanceStat
+                label="Прибыль"
+                value={task.profit}
+                formatMoney={formatMoney}
+                color={Number(task.profit) >= 0 ? 'teal' : 'red'}
+              />
+            </SimpleGrid>
+            <Text size="xs" c="dimmed" mt={8}>
+              К оплате = стоимость работ + сумма запчастей. Задолженность = к оплате − оплачено.
+              Прибыль = стоимость работ + маржа по запчастям − расходы − зарплаты.
+            </Text>
+          </Collapse>
         </Card>
       </SimpleGrid>
 
@@ -263,7 +370,7 @@ function TaskInfoCard({
   onSaved: (t: TaskDetail) => void
 }) {
   const [opened, { open, close }] = useDisclosure(false)
-  const form = useForm({ initialValues: { title: task.title, description: task.description ?? '' } })
+  const form = useForm({ initialValues: { description: task.description ?? '' } })
 
   async function handleSubmit(values: typeof form.values) {
     try {
@@ -289,10 +396,9 @@ function TaskInfoCard({
       </Group>
       <Text>{task.description || '—'}</Text>
 
-      <Modal opened={opened} onClose={close} title="Редактировать задачу">
+      <Modal opened={opened} onClose={close} title="Редактировать описание">
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
-            <TextInput label="Название" required {...form.getInputProps('title')} />
             <Textarea label="Описание" {...form.getInputProps('description')} />
             <Button type="submit">Сохранить</Button>
           </Stack>
@@ -416,7 +522,6 @@ function WorksSection({
 }) {
   const { formatMoney } = useSettings()
   const [opened, { open, close }] = useDisclosure(false)
-  const [editing, setEditing] = useState<Work | null>(null)
   const form = useForm({
     initialValues: {
       catalog_item_id: null as number | null,
@@ -430,7 +535,6 @@ function WorksSection({
   })
 
   function openCreate() {
-    setEditing(null)
     const now = new Date()
     form.setValues({
       catalog_item_id: null,
@@ -440,20 +544,6 @@ function WorksSection({
       planned_end: now,
       status: 'planned',
       assignee_id: '',
-    })
-    open()
-  }
-
-  function openEdit(w: Work) {
-    setEditing(w)
-    form.setValues({
-      catalog_item_id: w.catalog_item_id,
-      description: w.description,
-      service_price: Number(w.service_price),
-      planned_start: new Date(w.planned_start),
-      planned_end: new Date(w.planned_end),
-      status: w.status,
-      assignee_id: w.assignee_id ? String(w.assignee_id) : '',
     })
     open()
   }
@@ -477,15 +567,21 @@ function WorksSection({
       assignee_id: values.assignee_id ? Number(values.assignee_id) : null,
     }
     try {
-      if (editing) {
-        await updateWork(taskId, editing.id, payload)
-      } else {
-        await addWork(taskId, payload)
-      }
+      await addWork(taskId, payload)
       close()
       await refresh()
     } catch (e) {
       notifications.show({ color: 'red', message: apiErrorMessage(e, 'Не удалось сохранить работу') })
+    }
+  }
+
+  async function saveWork(workId: number, payload: Partial<WorkPayload>) {
+    try {
+      await updateWork(taskId, workId, payload)
+      await refresh()
+    } catch (e) {
+      notifications.show({ color: 'red', message: apiErrorMessage(e, 'Не удалось сохранить работу') })
+      await refresh()
     }
   }
 
@@ -499,8 +595,6 @@ function WorksSection({
     }
   }
 
-  const userName = (id: number | null) => users.find((u) => u.id === id)?.full_name ?? '—'
-  const fmt = (s: string) => new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const totalServicePrice = works.reduce((sum, w) => sum + Number(w.service_price), 0)
 
   return (
@@ -526,25 +620,65 @@ function WorksSection({
         <Table.Tbody>
           {works.map((w) => (
             <Table.Tr key={w.id}>
-              <Table.Td>{w.description}</Table.Td>
-              <Table.Td>{fmt(w.planned_start)}</Table.Td>
-              <Table.Td>{fmt(w.planned_end)}</Table.Td>
-              <Table.Td>{userName(w.assignee_id)}</Table.Td>
               <Table.Td>
-                <Badge color={w.status === 'done' ? 'teal' : 'gray'} variant="light">
-                  {w.status === 'done' ? 'выполнена' : 'запланирована'}
-                </Badge>
+                <InlineTextCell
+                  value={w.description}
+                  width={200}
+                  onCommit={(v) => saveWork(w.id, { description: v })}
+                />
               </Table.Td>
-              <Table.Td>{formatMoney(w.service_price)}</Table.Td>
               <Table.Td>
-                <Group gap="xs" justify="flex-end">
-                  <ActionIcon variant="subtle" onClick={() => openEdit(w)}>
-                    <IconEdit size={14} />
-                  </ActionIcon>
-                  <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(w.id)}>
-                    <IconTrash size={14} />
-                  </ActionIcon>
-                </Group>
+                <DateTimePicker
+                  size="xs"
+                  w={150}
+                  valueFormat="DD.MM.YYYY HH:mm"
+                  value={new Date(w.planned_start)}
+                  onChange={(d) => d && saveWork(w.id, { planned_start: d.toISOString() })}
+                />
+              </Table.Td>
+              <Table.Td>
+                <DateTimePicker
+                  size="xs"
+                  w={150}
+                  valueFormat="DD.MM.YYYY HH:mm"
+                  value={new Date(w.planned_end)}
+                  onChange={(d) => d && saveWork(w.id, { planned_end: d.toISOString() })}
+                />
+              </Table.Td>
+              <Table.Td>
+                <Select
+                  size="xs"
+                  w={140}
+                  data={users.map((u) => ({ value: String(u.id), label: u.full_name }))}
+                  searchable
+                  clearable
+                  value={w.assignee_id ? String(w.assignee_id) : null}
+                  onChange={(v) => saveWork(w.id, { assignee_id: v ? Number(v) : null })}
+                />
+              </Table.Td>
+              <Table.Td>
+                <Select
+                  size="xs"
+                  w={140}
+                  data={[
+                    { value: 'planned', label: 'Запланирована' },
+                    { value: 'done', label: 'Выполнена' },
+                  ]}
+                  allowDeselect={false}
+                  value={w.status}
+                  onChange={(v) => v && saveWork(w.id, { status: v as 'planned' | 'done' })}
+                />
+              </Table.Td>
+              <Table.Td>
+                <InlineNumberCell
+                  value={Number(w.service_price)}
+                  onCommit={(v) => saveWork(w.id, { service_price: String(v) })}
+                />
+              </Table.Td>
+              <Table.Td>
+                <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(w.id)}>
+                  <IconTrash size={14} />
+                </ActionIcon>
               </Table.Td>
             </Table.Tr>
           ))}
@@ -565,12 +699,18 @@ function WorksSection({
         </Text>
       )}
 
-      <Modal opened={opened} onClose={close} title={editing ? 'Редактировать работу' : 'Новая работа'}>
+      <Modal opened={opened} onClose={close} title="Новая работа">
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
             <CatalogPicker items={catalog} value={form.values.catalog_item_id} onChange={handleCatalogPick} />
             <TextInput label="Описание" required {...form.getInputProps('description')} />
-            <NumberInput label="Стоимость услуги" min={0} decimalScale={2} {...form.getInputProps('service_price')} />
+            <NumberInput
+              label="Стоимость услуги"
+              min={0}
+              decimalScale={2}
+              onFocus={selectOnFocus}
+              {...form.getInputProps('service_price')}
+            />
             <DateTimePicker label="Плановое начало" required valueFormat="DD.MM.YYYY HH:mm" {...form.getInputProps('planned_start')} />
             <DateTimePicker label="Плановое окончание" required valueFormat="DD.MM.YYYY HH:mm" {...form.getInputProps('planned_end')} />
             <Select
@@ -612,26 +752,13 @@ function PartsSection({
 }) {
   const { formatMoney } = useSettings()
   const [opened, { open, close }] = useDisclosure(false)
-  const [editing, setEditing] = useState<Part | null>(null)
+  const [marginOpened, { toggle: toggleMargin }] = useDisclosure(false)
   const form = useForm({
     initialValues: { catalog_item_id: null as number | null, name: '', quantity: 1, price_per_unit: 0, purchase_price: 0 },
   })
 
   function openCreate() {
-    setEditing(null)
     form.setValues({ catalog_item_id: null, name: '', quantity: 1, price_per_unit: 0, purchase_price: 0 })
-    open()
-  }
-
-  function openEdit(p: Part) {
-    setEditing(p)
-    form.setValues({
-      catalog_item_id: p.catalog_item_id,
-      name: p.name,
-      quantity: Number(p.quantity),
-      price_per_unit: Number(p.price_per_unit),
-      purchase_price: Number(p.purchase_price),
-    })
     open()
   }
 
@@ -653,12 +780,21 @@ function PartsSection({
       purchase_price: String(values.purchase_price),
     }
     try {
-      if (editing) await updatePart(taskId, editing.id, payload)
-      else await addPart(taskId, payload)
+      await addPart(taskId, payload)
       close()
       await refresh()
     } catch (e) {
       notifications.show({ color: 'red', message: apiErrorMessage(e, 'Не удалось сохранить запчасть') })
+    }
+  }
+
+  async function savePart(partId: number, payload: Partial<PartPayload>) {
+    try {
+      await updatePart(taskId, partId, payload)
+      await refresh()
+    } catch (e) {
+      notifications.show({ color: 'red', message: apiErrorMessage(e, 'Не удалось сохранить запчасть') })
+      await refresh()
     }
   }
 
@@ -697,21 +833,35 @@ function PartsSection({
         <Table.Tbody>
           {parts.map((p) => (
             <Table.Tr key={p.id}>
-              <Table.Td>{p.name}</Table.Td>
-              <Table.Td>{p.quantity}</Table.Td>
-              <Table.Td>{formatMoney(p.price_per_unit)}</Table.Td>
-              <Table.Td>{formatMoney(p.purchase_price)}</Table.Td>
+              <Table.Td>
+                <InlineTextCell value={p.name} width={180} onCommit={(v) => savePart(p.id, { name: v })} />
+              </Table.Td>
+              <Table.Td>
+                <InlineNumberCell
+                  value={Number(p.quantity)}
+                  decimalScale={3}
+                  width={90}
+                  onCommit={(v) => savePart(p.id, { quantity: String(v) })}
+                />
+              </Table.Td>
+              <Table.Td>
+                <InlineNumberCell
+                  value={Number(p.price_per_unit)}
+                  onCommit={(v) => savePart(p.id, { price_per_unit: String(v) })}
+                />
+              </Table.Td>
+              <Table.Td>
+                <InlineNumberCell
+                  value={Number(p.purchase_price)}
+                  onCommit={(v) => savePart(p.id, { purchase_price: String(v) })}
+                />
+              </Table.Td>
               <Table.Td>{formatMoney(p.amount)}</Table.Td>
               <Table.Td>{formatMoney(p.margin)}</Table.Td>
               <Table.Td>
-                <Group gap="xs" justify="flex-end">
-                  <ActionIcon variant="subtle" onClick={() => openEdit(p)}>
-                    <IconEdit size={14} />
-                  </ActionIcon>
-                  <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(p.id)}>
-                    <IconTrash size={14} />
-                  </ActionIcon>
-                </Group>
+                <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(p.id)}>
+                  <IconTrash size={14} />
+                </ActionIcon>
               </Table.Td>
             </Table.Tr>
           ))}
@@ -727,19 +877,62 @@ function PartsSection({
         </Table.Tbody>
       </Table>
       {parts.length > 0 && (
-        <Text ta="right" size="sm" fw={600} mt={4}>
-          Маржа по запчастям: {formatMoney(String(totalMargin))}
-        </Text>
+        <Stack gap={0} mt={4}>
+          <Group justify="flex-end" gap={4}>
+            <Text
+              size="sm"
+              c="dimmed"
+              style={{ cursor: 'pointer' }}
+              onClick={toggleMargin}
+            >
+              {marginOpened ? 'Скрыть маржу по запчастям' : 'Показать маржу по запчастям'}
+            </Text>
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              onClick={toggleMargin}
+              aria-label={marginOpened ? 'Скрыть маржу по запчастям' : 'Показать маржу по запчастям'}
+            >
+              {marginOpened ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
+            </ActionIcon>
+          </Group>
+          <Collapse in={marginOpened}>
+            <Text ta="right" size="sm" fw={600}>
+              Маржа по запчастям: {formatMoney(String(totalMargin))}
+            </Text>
+          </Collapse>
+        </Stack>
       )}
 
-      <Modal opened={opened} onClose={close} title={editing ? 'Редактировать запчасть' : 'Новая запчасть'}>
+      <Modal opened={opened} onClose={close} title="Новая запчасть">
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
             <CatalogPicker items={catalog} value={form.values.catalog_item_id} onChange={handleCatalogPick} />
             <TextInput label="Наименование" required {...form.getInputProps('name')} />
-            <NumberInput label="Количество" min={0} decimalScale={3} required {...form.getInputProps('quantity')} />
-            <NumberInput label="Цена продажи, за единицу" min={0} decimalScale={2} required {...form.getInputProps('price_per_unit')} />
-            <NumberInput label="Цена закупки, за единицу" min={0} decimalScale={2} required {...form.getInputProps('purchase_price')} />
+            <NumberInput
+              label="Количество"
+              min={0}
+              decimalScale={3}
+              required
+              onFocus={selectOnFocus}
+              {...form.getInputProps('quantity')}
+            />
+            <NumberInput
+              label="Цена продажи, за единицу"
+              min={0}
+              decimalScale={2}
+              required
+              onFocus={selectOnFocus}
+              {...form.getInputProps('price_per_unit')}
+            />
+            <NumberInput
+              label="Цена закупки, за единицу"
+              min={0}
+              decimalScale={2}
+              required
+              onFocus={selectOnFocus}
+              {...form.getInputProps('purchase_price')}
+            />
             <Button type="submit">Сохранить</Button>
           </Stack>
         </form>
@@ -773,30 +966,31 @@ function MoneyItemsSection({
 }) {
   const { formatMoney } = useSettings()
   const [opened, { open, close }] = useDisclosure(false)
-  const [editing, setEditing] = useState<MoneyItem | null>(null)
   const form = useForm({ initialValues: { description: '', amount: 0 } })
 
   function openCreate() {
-    setEditing(null)
     form.setValues({ description: '', amount: 0 })
-    open()
-  }
-
-  function openEdit(item: MoneyItem) {
-    setEditing(item)
-    form.setValues({ description: item.description, amount: Number(item.amount) })
     open()
   }
 
   async function handleSubmit(values: typeof form.values) {
     const payload = { description: values.description, amount: String(values.amount) }
     try {
-      if (editing) await updateFn(taskId, editing.id, payload)
-      else await addFn(taskId, payload)
+      await addFn(taskId, payload)
       close()
       await refresh()
     } catch (e) {
       notifications.show({ color: 'red', message: apiErrorMessage(e, 'Не удалось сохранить') })
+    }
+  }
+
+  async function saveItem(id: number, payload: Partial<{ description: string; amount: string }>) {
+    try {
+      await updateFn(taskId, id, payload)
+      await refresh()
+    } catch (e) {
+      notifications.show({ color: 'red', message: apiErrorMessage(e, 'Не удалось сохранить') })
+      await refresh()
     }
   }
 
@@ -838,18 +1032,29 @@ function MoneyItemsSection({
         <Table.Tbody>
           {items.map((i) => (
             <Table.Tr key={i.id}>
-              <Table.Td>{i.description}</Table.Td>
-              <Table.Td>{formatMoney(i.amount)}</Table.Td>
+              <Table.Td>
+                {isAdmin ? (
+                  <InlineTextCell
+                    value={i.description}
+                    width={200}
+                    onCommit={(v) => saveItem(i.id, { description: v })}
+                  />
+                ) : (
+                  i.description
+                )}
+              </Table.Td>
+              <Table.Td>
+                {isAdmin ? (
+                  <InlineNumberCell value={Number(i.amount)} onCommit={(v) => saveItem(i.id, { amount: String(v) })} />
+                ) : (
+                  formatMoney(i.amount)
+                )}
+              </Table.Td>
               {isAdmin && (
                 <Table.Td>
-                  <Group gap="xs" justify="flex-end">
-                    <ActionIcon variant="subtle" onClick={() => openEdit(i)}>
-                      <IconEdit size={14} />
-                    </ActionIcon>
-                    <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(i.id)}>
-                      <IconTrash size={14} />
-                    </ActionIcon>
-                  </Group>
+                  <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(i.id)}>
+                    <IconTrash size={14} />
+                  </ActionIcon>
                 </Table.Td>
               )}
             </Table.Tr>
@@ -871,11 +1076,18 @@ function MoneyItemsSection({
         </Text>
       )}
 
-      <Modal opened={opened} onClose={close} title={editing ? 'Редактировать запись' : 'Новая запись'}>
+      <Modal opened={opened} onClose={close} title="Новая запись">
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
             <TextInput label="Описание" required {...form.getInputProps('description')} />
-            <NumberInput label="Сумма" min={0} decimalScale={2} required {...form.getInputProps('amount')} />
+            <NumberInput
+              label="Сумма"
+              min={0}
+              decimalScale={2}
+              required
+              onFocus={selectOnFocus}
+              {...form.getInputProps('amount')}
+            />
             <Button type="submit">Сохранить</Button>
           </Stack>
         </form>
@@ -901,21 +1113,13 @@ function ParticipationsSection({
 }) {
   const { formatMoney } = useSettings()
   const [opened, { open, close }] = useDisclosure(false)
-  const [editing, setEditing] = useState<Participation | null>(null)
   const form = useForm({ initialValues: { user_id: '', hours: 0, amount: 0 } })
 
-  const availableUsers = users.filter((u) => editing?.user_id === u.id || !participations.some((p) => p.user_id === u.id))
+  const availableUsers = users.filter((u) => !participations.some((p) => p.user_id === u.id))
   const selectedUser = users.find((u) => String(u.id) === form.values.user_id)
 
   function openCreate() {
-    setEditing(null)
     form.setValues({ user_id: '', hours: 0, amount: 0 })
-    open()
-  }
-
-  function openEdit(p: Participation) {
-    setEditing(p)
-    form.setValues({ user_id: String(p.user_id), hours: p.hours ? Number(p.hours) : 0, amount: Number(p.amount) })
     open()
   }
 
@@ -938,18 +1142,21 @@ function ParticipationsSection({
     if (!values.user_id) return
     const isHourly = selectedUser?.rate_type === 'hourly'
     try {
-      if (editing) {
-        await updateParticipation(taskId, editing.id, {
-          hours: isHourly ? String(values.hours) : null,
-          amount: String(values.amount),
-        })
-      } else {
-        await addParticipation(taskId, Number(values.user_id), isHourly ? String(values.hours) : null, String(values.amount))
-      }
+      await addParticipation(taskId, Number(values.user_id), isHourly ? String(values.hours) : null, String(values.amount))
       close()
       await refresh()
     } catch (e) {
       notifications.show({ color: 'red', message: apiErrorMessage(e, 'Не удалось сохранить участие') })
+    }
+  }
+
+  async function saveParticipation(id: number, payload: Partial<{ hours: string | null; amount: string }>) {
+    try {
+      await updateParticipation(taskId, id, payload)
+      await refresh()
+    } catch (e) {
+      notifications.show({ color: 'red', message: apiErrorMessage(e, 'Не удалось сохранить участие') })
+      await refresh()
     }
   }
 
@@ -990,18 +1197,32 @@ function ParticipationsSection({
             <Table.Tr key={p.id}>
               <Table.Td>{p.user.full_name}</Table.Td>
               <Table.Td>{p.user.rate_type === 'hourly' ? 'Почасовая' : 'Фиксированная'}</Table.Td>
-              <Table.Td>{p.hours ?? '—'}</Table.Td>
-              <Table.Td>{formatMoney(p.amount)}</Table.Td>
+              <Table.Td>
+                {isAdmin && p.user.rate_type === 'hourly' ? (
+                  <InlineNumberCell
+                    value={p.hours ? Number(p.hours) : 0}
+                    width={90}
+                    onCommit={(v) => saveParticipation(p.id, { hours: String(v) })}
+                  />
+                ) : (
+                  (p.hours ?? '—')
+                )}
+              </Table.Td>
+              <Table.Td>
+                {isAdmin ? (
+                  <InlineNumberCell
+                    value={Number(p.amount)}
+                    onCommit={(v) => saveParticipation(p.id, { amount: String(v) })}
+                  />
+                ) : (
+                  formatMoney(p.amount)
+                )}
+              </Table.Td>
               {isAdmin && (
                 <Table.Td>
-                  <Group gap="xs" justify="flex-end">
-                    <ActionIcon variant="subtle" onClick={() => openEdit(p)}>
-                      <IconEdit size={14} />
-                    </ActionIcon>
-                    <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(p.id)}>
-                      <IconTrash size={14} />
-                    </ActionIcon>
-                  </Group>
+                  <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(p.id)}>
+                    <IconTrash size={14} />
+                  </ActionIcon>
                 </Table.Td>
               )}
             </Table.Tr>
@@ -1023,7 +1244,7 @@ function ParticipationsSection({
         </Text>
       )}
 
-      <Modal opened={opened} onClose={close} title={editing ? 'Редактировать участие' : 'Добавить участие'}>
+      <Modal opened={opened} onClose={close} title="Добавить участие">
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
             <Select
@@ -1031,18 +1252,18 @@ function ParticipationsSection({
               data={availableUsers.map((u) => ({ value: String(u.id), label: u.full_name }))}
               searchable
               required
-              disabled={!!editing}
               value={form.values.user_id}
               onChange={(v) => v && handleUserPick(v)}
             />
             {selectedUser?.rate_type === 'hourly' && (
-              <NumberInput label="Часы" min={0} decimalScale={2} {...form.getInputProps('hours')} />
+              <NumberInput label="Часы" min={0} decimalScale={2} onFocus={selectOnFocus} {...form.getInputProps('hours')} />
             )}
             <NumberInput
               label="Сумма начисления"
               min={0}
               decimalScale={2}
               required
+              onFocus={selectOnFocus}
               description={selectedUser?.rate_type === 'hourly' ? 'Подставлено автоматически (ставка × часы), можно скорректировать' : undefined}
               {...form.getInputProps('amount')}
             />

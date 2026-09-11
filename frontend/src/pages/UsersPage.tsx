@@ -18,10 +18,18 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FocusEvent } from 'react'
 import { apiErrorMessage } from '../api/client'
 import type { User } from '../api/types'
 import { type UserPayload, createUser, deleteUser, listUsers, updateUser } from '../api/users'
+
+// Mantine's NumberInput keeps the initial 0 in place and inserts typed
+// digits next to it instead of replacing it. Selecting the whole value on
+// focus makes the first keystroke overwrite it, like a normal spreadsheet
+// cell.
+function selectOnFocus(e: FocusEvent<HTMLInputElement>) {
+  e.currentTarget.select()
+}
 
 interface FormValues {
   full_name: string
@@ -204,6 +212,7 @@ export function UsersPage() {
               label={form.values.rate_type === 'hourly' ? 'Ставка, ₽/час' : 'Фиксированная ставка, ₽'}
               min={0}
               decimalScale={2}
+              onFocus={selectOnFocus}
               {...form.getInputProps('rate_amount')}
             />
             <Switch label="Активен" {...form.getInputProps('is_active', { type: 'checkbox' })} />
