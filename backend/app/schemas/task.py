@@ -53,6 +53,8 @@ class TaskListItem(BaseModel):
     client: ClientOut
     stage: TaskStageOut
     assignments: list[TaskAssignmentOut]
+    # filled in by _task_list_item() after validation, same as TaskDetail
+    invoice_total: Decimal = Decimal("0")
 
 
 class TaskDetail(BaseModel):

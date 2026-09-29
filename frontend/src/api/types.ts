@@ -103,6 +103,7 @@ export interface TaskListItem {
   client: Client
   stage: TaskStage
   assignments: TaskAssignment[]
+  invoice_total: string
 }
 
 export interface TaskDetail {

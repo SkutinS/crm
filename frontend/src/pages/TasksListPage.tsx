@@ -15,6 +15,7 @@ import type { User } from '../api/types'
 import { ClientPicker } from '../components/ClientPicker'
 import { StageSelect } from '../components/StageSelect'
 import { useAuth } from '../context/AuthContext'
+import { useSettings } from '../context/SettingsContext'
 
 interface CreateFormValues {
   client_id: string | null
@@ -34,6 +35,7 @@ const EMPTY_FORM: CreateFormValues = {
 
 export function TasksListPage() {
   const { isAdmin } = useAuth()
+  const { formatMoney } = useSettings()
   const navigate = useNavigate()
 
   const [tasks, setTasks] = useState<TaskListItem[]>([])
@@ -144,6 +146,8 @@ export function TasksListPage() {
           <Table.Tr>
             <Table.Th>Клиент</Table.Th>
             <Table.Th>Задача</Table.Th>
+            <Table.Th>Дата</Table.Th>
+            <Table.Th>Сумма</Table.Th>
             <Table.Th>Участники</Table.Th>
             <Table.Th>Этап</Table.Th>
           </Table.Tr>
@@ -153,6 +157,10 @@ export function TasksListPage() {
             <Table.Tr key={t.id} style={{ cursor: 'pointer' }}>
               <Table.Td onClick={() => navigate(`/tasks/${t.id}`)}>{t.client.name}</Table.Td>
               <Table.Td onClick={() => navigate(`/tasks/${t.id}`)}>{t.title}</Table.Td>
+              <Table.Td onClick={() => navigate(`/tasks/${t.id}`)}>
+                {new Date(t.created_at).toLocaleDateString('ru-RU')}
+              </Table.Td>
+              <Table.Td onClick={() => navigate(`/tasks/${t.id}`)}>{formatMoney(t.invoice_total)}</Table.Td>
               <Table.Td onClick={() => navigate(`/tasks/${t.id}`)}>
                 <Avatar.Group>
                   {t.assignments.map((a) => (
@@ -175,7 +183,7 @@ export function TasksListPage() {
           ))}
           {!loading && tasks.length === 0 && (
             <Table.Tr>
-              <Table.Td colSpan={4}>
+              <Table.Td colSpan={6}>
                 <Text c="dimmed" ta="center" py="md">
                   Задач пока нет
                 </Text>

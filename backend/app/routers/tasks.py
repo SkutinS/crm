@@ -57,13 +57,19 @@ def _task_detail(task: Task) -> TaskDetail:
     return detail
 
 
+def _task_list_item(task: Task) -> TaskListItem:
+    item = TaskListItem.model_validate(task, from_attributes=True)
+    item.invoice_total = task_invoice_total(task)
+    return item
+
+
 @router.get("", response_model=list[TaskListItem])
 def list_tasks(
     user: CurrentUser,
     db: Session = Depends(get_db),
     client_id: int | None = None,
     stage_id: int | None = None,
-) -> list[Task]:
+) -> list[TaskListItem]:
     stmt = select(Task).options(*TASK_LOAD_OPTIONS).order_by(Task.created_at.desc())
     if client_id is not None:
         stmt = stmt.where(Task.client_id == client_id)
@@ -73,7 +79,7 @@ def list_tasks(
     tasks = list(db.scalars(stmt).unique())
     if user.role != UserRole.admin:
         tasks = [t for t in tasks if any(a.user_id == user.id for a in t.assignments)]
-    return tasks
+    return [_task_list_item(t) for t in tasks]
 
 
 @router.post("", response_model=TaskDetail, status_code=status.HTTP_201_CREATED)
