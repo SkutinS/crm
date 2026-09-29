@@ -8,7 +8,7 @@ from app.models.cash import CashDocument, CashRegister
 from app.models.enums import CashDocumentType
 from app.models.reference_catalog import CostCategory, IncomeCategory
 from app.schemas.cash import CashDocumentCreate, CashDocumentOut, CashDocumentUpdate, CashSummary
-from app.services.cash import cash_balance, cash_journal
+from app.services.cash import cash_balance_from_entries, cash_journal
 
 router = APIRouter(prefix="/api/cash", tags=["cash"])
 
@@ -41,7 +41,8 @@ def _validate_category(db: Session, payload_type: CashDocumentType, cost_categor
 
 @router.get("", response_model=CashSummary)
 def get_cash_summary(_: CashUser, db: Session = Depends(get_db)) -> CashSummary:
-    return CashSummary(balance=cash_balance(db), entries=cash_journal(db))
+    entries = cash_journal(db)
+    return CashSummary(balance=cash_balance_from_entries(entries), entries=entries)
 
 
 @router.post("/documents", response_model=CashDocumentOut, status_code=status.HTTP_201_CREATED)

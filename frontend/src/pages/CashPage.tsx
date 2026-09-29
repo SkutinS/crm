@@ -30,8 +30,10 @@ import {
   updateCashDocument,
   type CashDocumentPayload,
 } from '../api/cash'
-import { listCostCategories, listIncomeCategories } from '../api/referenceCatalogs'
+import { createCostCategory, createIncomeCategory, listCostCategories, listIncomeCategories } from '../api/referenceCatalogs'
 import type { CashDocumentType, CashJournalEntry, CostCategory, IncomeCategory } from '../api/types'
+import { CreatableSelect } from '../components/CreatableSelect'
+import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { categoryOptions } from '../utils/categoryOptions'
 import { formatDateOnly, parseDateOnly, toDateOnly } from '../utils/dateOnly'
@@ -57,6 +59,7 @@ const EMPTY: FormValues = {
 
 export function CashPage() {
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
   const { formatMoney } = useSettings()
 
   const [balance, setBalance] = useState<string>('0')
@@ -248,11 +251,24 @@ export function CashPage() {
               onFocus={selectOnFocus}
               {...form.getInputProps('amount')}
             />
-            <Select
+            <CreatableSelect
               label={form.values.doc_type === 'income' ? 'Статья дохода' : 'Статья затрат'}
               placeholder="Выберите статью"
               required
               data={categoryData}
+              canCreate={isAdmin}
+              onCreate={async (name) => {
+                if (form.values.doc_type === 'income') {
+                  const c = await createIncomeCategory({ name })
+                  return { option: { value: String(c.id), label: c.name }, record: c }
+                }
+                const c = await createCostCategory({ name })
+                return { option: { value: String(c.id), label: c.name }, record: c }
+              }}
+              onCreated={(c) => {
+                if (form.values.doc_type === 'income') setIncomeCategories((prev) => [...prev, c as IncomeCategory])
+                else setCostCategories((prev) => [...prev, c as CostCategory])
+              }}
               {...form.getInputProps('category_id')}
             />
             <DateInput label="Дата" required valueFormat="DD.MM.YYYY" {...form.getInputProps('document_date')} />

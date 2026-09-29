@@ -93,6 +93,9 @@ export interface Participation {
   hours: string | null
   amount: string
   paid_at: string | null
+  comment: string | null
+  cost_category_id: number | null
+  cost_category: { id: number; name: string; is_active: boolean } | null
   user: User
 }
 
@@ -154,6 +157,7 @@ export interface PartCatalogItem {
 export interface SystemSettings {
   currency_code: string
   currency_symbol: string
+  default_salary_cost_category_id: number | null
 }
 
 export type CashDocumentType = 'income' | 'expense'
@@ -171,7 +175,7 @@ export interface CashDocument {
 }
 
 export interface CashJournalEntry {
-  source: 'cash_document' | 'task_expense' | 'task_income'
+  source: 'cash_document' | 'task_expense' | 'task_income' | 'task_participation' | 'task_part_purchase'
   source_id: number
   doc_type: CashDocumentType
   amount: string

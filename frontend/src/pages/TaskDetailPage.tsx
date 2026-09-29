@@ -26,7 +26,7 @@ import { IconChevronDown, IconChevronUp, IconEdit, IconPlus, IconTrash } from '@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiErrorMessage } from '../api/client'
-import { listPartCatalog, listServiceCatalog } from '../api/catalog'
+import { createPartCatalogItem, createServiceCatalogItem, listPartCatalog, listServiceCatalog } from '../api/catalog'
 import { listTaskStages } from '../api/taskStages'
 import {
   addAssignment,
@@ -68,9 +68,10 @@ import type {
   User,
   Work,
 } from '../api/types'
-import { listCostCategories, listIncomeCategories } from '../api/referenceCatalogs'
+import { createCostCategory, createIncomeCategory, listCostCategories, listIncomeCategories } from '../api/referenceCatalogs'
 import { listUsers } from '../api/users'
 import { CatalogPicker } from '../components/CatalogPicker'
+import { CreatableSelect } from '../components/CreatableSelect'
 import { StageSelect } from '../components/StageSelect'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
@@ -172,6 +173,37 @@ function InlineDateCell({
   )
 }
 
+// Same idea as InlineTextCell, but for an optional field: an emptied cell
+// commits `null` (clears the value) instead of reverting to the previous
+// text — InlineTextCell reverts on empty because it's only used for
+// required fields (title, name, description).
+function InlineOptionalTextCell({
+  value,
+  onCommit,
+  width,
+}: {
+  value: string | null
+  onCommit: (value: string | null) => void
+  width?: number
+}) {
+  const [local, setLocal] = useState(value ?? '')
+  useEffect(() => setLocal(value ?? ''), [value])
+
+  return (
+    <TextInput
+      size="xs"
+      w={width}
+      value={local}
+      onChange={(e) => setLocal(e.currentTarget.value)}
+      onBlur={() => {
+        const next = local.trim()
+        const normalized = next === '' ? null : next
+        if (normalized !== value) onCommit(normalized)
+      }}
+    />
+  )
+}
+
 function FinanceStat({
   label,
   value,
@@ -200,7 +232,7 @@ export function TaskDetailPage() {
   const taskId = Number(id)
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
-  const { formatMoney } = useSettings()
+  const { settings, formatMoney } = useSettings()
 
   const [task, setTask] = useState<TaskDetail | null>(null)
   const [stages, setStages] = useState<TaskStage[]>([])
@@ -339,6 +371,8 @@ export function TaskDetailPage() {
         works={task.works}
         users={users}
         catalog={serviceCatalog}
+        isAdmin={isAdmin}
+        onCatalogCreated={(item) => setServiceCatalog((prev) => [...prev, item])}
         refresh={async () => setTask(await getTask(taskId))}
       />
 
@@ -346,6 +380,8 @@ export function TaskDetailPage() {
         taskId={taskId}
         parts={task.parts}
         catalog={partCatalog}
+        isAdmin={isAdmin}
+        onCatalogCreated={(item) => setPartCatalog((prev) => [...prev, item])}
         refresh={async () => setTask(await getTask(taskId))}
       />
 
@@ -357,6 +393,8 @@ export function TaskDetailPage() {
           items={task.incomes}
           categories={incomeCategories}
           categoryLabel="Статья дохода"
+          onCreateCategory={(name) => createIncomeCategory({ name })}
+          onCategoryCreated={(c) => setIncomeCategories((prev) => [...prev, c])}
           addFn={addIncome}
           updateFn={updateIncome}
           deleteFn={deleteIncome}
@@ -369,6 +407,8 @@ export function TaskDetailPage() {
           items={task.expenses}
           categories={costCategories}
           categoryLabel="Статья затрат"
+          onCreateCategory={(name) => createCostCategory({ name })}
+          onCategoryCreated={(c) => setCostCategories((prev) => [...prev, c])}
           addFn={addExpense}
           updateFn={updateExpense}
           deleteFn={deleteExpense}
@@ -381,6 +421,9 @@ export function TaskDetailPage() {
         taskId={taskId}
         participations={task.participations}
         users={users}
+        costCategories={costCategories}
+        onCategoryCreated={(c) => setCostCategories((prev) => [...prev, c])}
+        defaultSalaryCostCategoryId={settings.default_salary_cost_category_id}
         refresh={async () => setTask(await getTask(taskId))}
         isAdmin={isAdmin}
       />
@@ -542,12 +585,16 @@ function WorksSection({
   works,
   users,
   catalog,
+  isAdmin,
+  onCatalogCreated,
   refresh,
 }: {
   taskId: number
   works: Work[]
   users: User[]
   catalog: ServiceCatalogItem[]
+  isAdmin: boolean
+  onCatalogCreated: (item: ServiceCatalogItem) => void
   refresh: () => Promise<void>
 }) {
   const { formatMoney } = useSettings()
@@ -732,7 +779,14 @@ function WorksSection({
       <Modal opened={opened} onClose={close} title="Новая работа">
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
-            <CatalogPicker items={catalog} value={form.values.catalog_item_id} onChange={handleCatalogPick} />
+            <CatalogPicker
+              items={catalog}
+              value={form.values.catalog_item_id}
+              onChange={handleCatalogPick}
+              canCreate={isAdmin}
+              onCreate={(name) => createServiceCatalogItem({ parent_id: null, name, default_price: null })}
+              onCreated={onCatalogCreated}
+            />
             <TextInput label="Описание" required {...form.getInputProps('description')} />
             <NumberInput
               label="Стоимость услуги"
@@ -773,11 +827,15 @@ function PartsSection({
   taskId,
   parts,
   catalog,
+  isAdmin,
+  onCatalogCreated,
   refresh,
 }: {
   taskId: number
   parts: Part[]
   catalog: PartCatalogItem[]
+  isAdmin: boolean
+  onCatalogCreated: (item: PartCatalogItem) => void
   refresh: () => Promise<void>
 }) {
   const { formatMoney } = useSettings()
@@ -959,7 +1017,16 @@ function PartsSection({
       <Modal opened={opened} onClose={close} title="Новая запчасть">
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
-            <CatalogPicker items={catalog} value={form.values.catalog_item_id} onChange={handleCatalogPick} />
+            <CatalogPicker
+              items={catalog}
+              value={form.values.catalog_item_id}
+              onChange={handleCatalogPick}
+              canCreate={isAdmin}
+              onCreate={(name) =>
+                createPartCatalogItem({ parent_id: null, name, default_sale_price: null, default_purchase_price: null })
+              }
+              onCreated={onCatalogCreated}
+            />
             <TextInput label="Наименование" required {...form.getInputProps('name')} />
             <DateInput label="Дата" required valueFormat="DD.MM.YYYY" {...form.getInputProps('document_date')} />
             <NumberInput
@@ -1003,6 +1070,8 @@ function MoneyItemsSection({
   items,
   categories,
   categoryLabel,
+  onCreateCategory,
+  onCategoryCreated,
   addFn,
   updateFn,
   deleteFn,
@@ -1015,6 +1084,8 @@ function MoneyItemsSection({
   items: MoneyItem[]
   categories: { id: number; name: string; is_active: boolean }[]
   categoryLabel: string
+  onCreateCategory: (name: string) => Promise<{ id: number; name: string; is_active: boolean }>
+  onCategoryCreated: (category: { id: number; name: string; is_active: boolean }) => void
   addFn: (taskId: number, payload: MoneyItemPayload) => Promise<MoneyItem>
   updateFn: (taskId: number, id: number, payload: Partial<MoneyItemPayload>) => Promise<MoneyItem>
   deleteFn: (taskId: number, id: number) => Promise<unknown>
@@ -1118,12 +1189,18 @@ function MoneyItemsSection({
               </Table.Td>
               <Table.Td>
                 {isAdmin ? (
-                  <Select
+                  <CreatableSelect
                     size="xs"
                     w={170}
                     data={categoryOptions(categories, i.category_id)}
                     value={i.category_id ? String(i.category_id) : null}
                     onChange={(v) => v && saveItem(i.id, { category_id: Number(v) })}
+                    canCreate={isAdmin}
+                    onCreate={async (name) => {
+                      const c = await onCreateCategory(name)
+                      return { option: { value: String(c.id), label: c.name }, record: c }
+                    }}
+                    onCreated={onCategoryCreated}
                   />
                 ) : (
                   (i.category?.name ?? '—')
@@ -1174,11 +1251,17 @@ function MoneyItemsSection({
               onFocus={selectOnFocus}
               {...form.getInputProps('amount')}
             />
-            <Select
+            <CreatableSelect
               label={categoryLabel}
               placeholder="Выберите статью"
               required
               data={categoryOptions(categories, null)}
+              canCreate={isAdmin}
+              onCreate={async (name) => {
+                const c = await onCreateCategory(name)
+                return { option: { value: String(c.id), label: c.name }, record: c }
+              }}
+              onCreated={onCategoryCreated}
               {...form.getInputProps('category_id')}
             />
             <DateInput label="Дата" required valueFormat="DD.MM.YYYY" {...form.getInputProps('document_date')} />
@@ -1196,24 +1279,35 @@ function ParticipationsSection({
   taskId,
   participations,
   users,
+  costCategories,
+  onCategoryCreated,
+  defaultSalaryCostCategoryId,
   refresh,
   isAdmin,
 }: {
   taskId: number
   participations: Participation[]
   users: User[]
+  costCategories: CostCategory[]
+  onCategoryCreated: (category: CostCategory) => void
+  defaultSalaryCostCategoryId: number | null
   refresh: () => Promise<void>
   isAdmin: boolean
 }) {
   const { formatMoney } = useSettings()
   const [opened, { open, close }] = useDisclosure(false)
-  const form = useForm({ initialValues: { user_id: '', hours: 0, amount: 0 } })
+  const form = useForm({ initialValues: { user_id: '', hours: 0, amount: 0, cost_category_id: '', comment: '' } })
 
-  const availableUsers = users.filter((u) => !participations.some((p) => p.user_id === u.id))
   const selectedUser = users.find((u) => String(u.id) === form.values.user_id)
 
   function openCreate() {
-    form.setValues({ user_id: '', hours: 0, amount: 0 })
+    form.setValues({
+      user_id: '',
+      hours: 0,
+      amount: 0,
+      cost_category_id: defaultSalaryCostCategoryId ? String(defaultSalaryCostCategoryId) : '',
+      comment: '',
+    })
     open()
   }
 
@@ -1236,7 +1330,13 @@ function ParticipationsSection({
     if (!values.user_id) return
     const isHourly = selectedUser?.rate_type === 'hourly'
     try {
-      await addParticipation(taskId, Number(values.user_id), isHourly ? String(values.hours) : null, String(values.amount))
+      await addParticipation(taskId, {
+        user_id: Number(values.user_id),
+        hours: isHourly ? String(values.hours) : null,
+        amount: String(values.amount),
+        cost_category_id: values.cost_category_id ? Number(values.cost_category_id) : null,
+        comment: values.comment || null,
+      })
       close()
       await refresh()
     } catch (e) {
@@ -1246,7 +1346,13 @@ function ParticipationsSection({
 
   async function saveParticipation(
     id: number,
-    payload: Partial<{ hours: string | null; amount: string; paid_at: string | null }>,
+    payload: Partial<{
+      hours: string | null
+      amount: string
+      paid_at: string | null
+      comment: string | null
+      cost_category_id: number | null
+    }>,
   ) {
     try {
       await updateParticipation(taskId, id, payload)
@@ -1283,9 +1389,10 @@ function ParticipationsSection({
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Сотрудник</Table.Th>
-            <Table.Th>Тип ставки</Table.Th>
             <Table.Th>Часы</Table.Th>
             <Table.Th>Начислено</Table.Th>
+            <Table.Th>Статья</Table.Th>
+            <Table.Th>Комментарий</Table.Th>
             <Table.Th>Дата выплаты</Table.Th>
             {isAdmin && <Table.Th />}
           </Table.Tr>
@@ -1294,7 +1401,6 @@ function ParticipationsSection({
           {participations.map((p) => (
             <Table.Tr key={p.id}>
               <Table.Td>{p.user.full_name}</Table.Td>
-              <Table.Td>{p.user.rate_type === 'hourly' ? 'Почасовая' : 'Фиксированная'}</Table.Td>
               <Table.Td>
                 {isAdmin && p.user.rate_type === 'hourly' ? (
                   <InlineNumberCell
@@ -1314,6 +1420,37 @@ function ParticipationsSection({
                   />
                 ) : (
                   formatMoney(p.amount)
+                )}
+              </Table.Td>
+              <Table.Td>
+                {isAdmin ? (
+                  <CreatableSelect
+                    size="xs"
+                    w={170}
+                    data={categoryOptions(costCategories, p.cost_category_id)}
+                    value={p.cost_category_id ? String(p.cost_category_id) : null}
+                    onChange={(v) => saveParticipation(p.id, { cost_category_id: v ? Number(v) : null })}
+                    clearable
+                    canCreate={isAdmin}
+                    onCreate={async (name) => {
+                      const c = await createCostCategory({ name })
+                      return { option: { value: String(c.id), label: c.name }, record: c }
+                    }}
+                    onCreated={onCategoryCreated}
+                  />
+                ) : (
+                  (p.cost_category?.name ?? '—')
+                )}
+              </Table.Td>
+              <Table.Td>
+                {isAdmin ? (
+                  <InlineOptionalTextCell
+                    value={p.comment}
+                    width={160}
+                    onCommit={(v) => saveParticipation(p.id, { comment: v })}
+                  />
+                ) : (
+                  (p.comment ?? '—')
                 )}
               </Table.Td>
               <Table.Td>
@@ -1338,7 +1475,7 @@ function ParticipationsSection({
           ))}
           {participations.length === 0 && (
             <Table.Tr>
-              <Table.Td colSpan={isAdmin ? 6 : 5}>
+              <Table.Td colSpan={isAdmin ? 7 : 6}>
                 <Text c="dimmed" size="sm" ta="center" py="sm">
                   Участие пока не отмечено
                 </Text>
@@ -1358,7 +1495,7 @@ function ParticipationsSection({
           <Stack>
             <Select
               label="Сотрудник"
-              data={availableUsers.map((u) => ({ value: String(u.id), label: u.full_name }))}
+              data={users.map((u) => ({ value: String(u.id), label: u.full_name }))}
               searchable
               required
               value={form.values.user_id}
@@ -1376,6 +1513,21 @@ function ParticipationsSection({
               description={selectedUser?.rate_type === 'hourly' ? 'Подставлено автоматически (ставка × часы), можно скорректировать' : undefined}
               {...form.getInputProps('amount')}
             />
+            <CreatableSelect
+              label="Статья затрат"
+              placeholder="Не выбрана"
+              data={categoryOptions(costCategories, null)}
+              clearable
+              searchable
+              canCreate={isAdmin}
+              onCreate={async (name) => {
+                const c = await createCostCategory({ name })
+                return { option: { value: String(c.id), label: c.name }, record: c }
+              }}
+              onCreated={onCategoryCreated}
+              {...form.getInputProps('cost_category_id')}
+            />
+            <TextInput label="Комментарий" {...form.getInputProps('comment')} />
             <Button type="submit">Сохранить</Button>
           </Stack>
         </form>

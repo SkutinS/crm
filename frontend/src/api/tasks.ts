@@ -147,16 +147,29 @@ export function suggestParticipation(taskId: number, userId: number) {
     .then((r) => r.data)
 }
 
-export function addParticipation(taskId: number, user_id: number, hours: string | null, amount: string | null) {
-  return api
-    .post<Participation>(`/tasks/${taskId}/participations`, { user_id, hours, amount })
-    .then((r) => r.data)
+export interface ParticipationPayload {
+  user_id: number
+  hours: string | null
+  amount: string | null
+  paid_at?: string | null
+  comment?: string | null
+  cost_category_id?: number | null
+}
+
+export function addParticipation(taskId: number, payload: ParticipationPayload) {
+  return api.post<Participation>(`/tasks/${taskId}/participations`, payload).then((r) => r.data)
 }
 
 export function updateParticipation(
   taskId: number,
   id: number,
-  payload: Partial<{ hours: string | null; amount: string; paid_at: string | null }>,
+  payload: Partial<{
+    hours: string | null
+    amount: string
+    paid_at: string | null
+    comment: string | null
+    cost_category_id: number | null
+  }>,
 ) {
   return api.patch<Participation>(`/tasks/${taskId}/participations/${id}`, payload).then((r) => r.data)
 }

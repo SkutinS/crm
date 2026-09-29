@@ -7,24 +7,15 @@ from app.models.cash import CashDocument
 from app.models.enums import CashDocumentType
 from app.models.expense import Expense
 from app.models.income import Income
+from app.models.part import Part
+from app.models.participation import Participation
 from app.models.task import Task
 from app.schemas.cash import CashJournalEntry, CashJournalTaskRef
 
 
-def cash_balance(db: Session) -> Decimal:
-    total = Decimal("0")
-    for doc in db.scalars(select(CashDocument)):
-        total += doc.amount if doc.doc_type == CashDocumentType.income else -doc.amount
-    for income in db.scalars(select(Income)):
-        total += income.amount
-    for expense in db.scalars(select(Expense)):
-        total -= expense.amount
-    return total
-
-
 def _sort_key(entry: CashJournalEntry) -> tuple[int, int, int]:
-    # Most recent document_date first; entries with no date (legacy
-    # Expense/Income predating that field) sort last, newest-id first.
+    # Most recent document_date first; entries with no date (legacy rows,
+    # or a Participation/Part not yet dated) sort last, newest-id first.
     has_date = entry.document_date is not None
     date_component = -entry.document_date.toordinal() if has_date else 0
     return (0 if has_date else 1, date_component, -entry.source_id)
@@ -58,8 +49,11 @@ def cash_journal(db: Session) -> list[CashJournalEntry]:
 
     tasks_by_id: dict[int, Task] = {t.id: t for t in db.scalars(select(Task))}
 
+    def task_ref(task_id: int) -> CashJournalTaskRef | None:
+        task = tasks_by_id.get(task_id)
+        return CashJournalTaskRef(id=task.id, title=task.title) if task else None
+
     for income in db.scalars(select(Income).options(selectinload(Income.category))):
-        task = tasks_by_id.get(income.task_id)
         entries.append(
             CashJournalEntry(
                 source="task_income",
@@ -69,12 +63,13 @@ def cash_journal(db: Session) -> list[CashJournalEntry]:
                 document_date=income.document_date,
                 description=income.description,
                 category_name=income.category.name if income.category else None,
-                task=CashJournalTaskRef(id=task.id, title=task.title) if task else None,
+                cost_category_id=None,
+                income_category_id=income.category_id,
+                task=task_ref(income.task_id),
             )
         )
 
     for expense in db.scalars(select(Expense).options(selectinload(Expense.category))):
-        task = tasks_by_id.get(expense.task_id)
         entries.append(
             CashJournalEntry(
                 source="task_expense",
@@ -84,9 +79,60 @@ def cash_journal(db: Session) -> list[CashJournalEntry]:
                 document_date=expense.document_date,
                 description=expense.description,
                 category_name=expense.category.name if expense.category else None,
-                task=CashJournalTaskRef(id=task.id, title=task.title) if task else None,
+                cost_category_id=expense.category_id,
+                income_category_id=None,
+                task=task_ref(expense.task_id),
+            )
+        )
+
+    for participation in db.scalars(select(Participation).options(selectinload(Participation.cost_category))):
+        entries.append(
+            CashJournalEntry(
+                source="task_participation",
+                source_id=participation.id,
+                doc_type=CashDocumentType.expense,
+                amount=participation.amount,
+                document_date=participation.paid_at,
+                description=participation.comment,
+                category_name=participation.cost_category.name if participation.cost_category else None,
+                cost_category_id=participation.cost_category_id,
+                income_category_id=None,
+                task=task_ref(participation.task_id),
+            )
+        )
+
+    for part in db.scalars(select(Part).where(Part.purchase_price > 0)):
+        entries.append(
+            CashJournalEntry(
+                source="task_part_purchase",
+                source_id=part.id,
+                doc_type=CashDocumentType.expense,
+                amount=part.quantity * part.purchase_price,
+                document_date=part.document_date,
+                description=part.name,
+                category_name=None,
+                cost_category_id=None,
+                income_category_id=None,
+                task=task_ref(part.task_id),
             )
         )
 
     entries.sort(key=_sort_key)
     return entries
+
+
+def cash_balance_from_entries(entries: list[CashJournalEntry]) -> Decimal:
+    """Undated entries (legacy rows, or a Participation/Part not yet dated)
+    are shown in the journal but excluded from the balance — there's no
+    date to place them on.
+    """
+    total = Decimal("0")
+    for entry in entries:
+        if entry.document_date is None:
+            continue
+        total += entry.amount if entry.doc_type == CashDocumentType.income else -entry.amount
+    return total
+
+
+def cash_balance(db: Session) -> Decimal:
+    return cash_balance_from_entries(cash_journal(db))

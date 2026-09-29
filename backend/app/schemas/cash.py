@@ -45,13 +45,15 @@ class CashJournalTaskRef(BaseModel):
 
 class CashJournalEntry(BaseModel):
     """One row in the cash journal — either a standalone CashDocument or a
-    task-scoped Expense/Income, normalized to the same shape for display.
-    `source_id` + `source` identify the underlying row for edit/delete
-    (only `cash_document` entries support those; task-scoped entries are
-    edited from the task itself).
+    task-scoped Expense/Income/Participation/Part, normalized to the same
+    shape for display. `source_id` + `source` identify the underlying row
+    for edit/delete (only `cash_document` entries support those;
+    task-scoped entries are edited from the task itself).
     """
 
-    source: Literal["cash_document", "task_expense", "task_income"]
+    source: Literal[
+        "cash_document", "task_expense", "task_income", "task_participation", "task_part_purchase"
+    ]
     source_id: int
     doc_type: CashDocumentType
     amount: Decimal

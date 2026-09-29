@@ -11,6 +11,7 @@ from app.models.income import Income
 from app.models.part import Part
 from app.models.participation import Participation
 from app.models.reference_catalog import CostCategory, IncomeCategory
+from app.models.settings import SystemSettings
 from app.models.task import Task, TaskAssignment
 from app.models.task_stage import TaskStage
 from app.models.user import User
@@ -46,6 +47,7 @@ TASK_LOAD_OPTIONS = (
     selectinload(Task.expenses).selectinload(Expense.category),
     selectinload(Task.incomes).selectinload(Income.category),
     selectinload(Task.participations).selectinload(Participation.user),
+    selectinload(Task.participations).selectinload(Participation.cost_category),
 )
 
 
@@ -398,8 +400,24 @@ def add_participation(
         hours = hours if hours is not None else suggested_hours
         amount = suggested_amount
 
+    if payload.cost_category_id is not None:
+        _validate_cost_category(db, payload.cost_category_id)
+        cost_category_id = payload.cost_category_id
+    else:
+        # Pre-fill from the system default, but only as a one-time starting
+        # value — this is not stored anywhere that later setting changes
+        # could propagate back into.
+        system_settings = db.get(SystemSettings, 1)
+        cost_category_id = system_settings.default_salary_cost_category_id if system_settings else None
+
     participation = Participation(
-        task_id=task_id, user_id=payload.user_id, hours=hours, amount=amount, paid_at=payload.paid_at
+        task_id=task_id,
+        user_id=payload.user_id,
+        hours=hours,
+        amount=amount,
+        paid_at=payload.paid_at,
+        comment=payload.comment,
+        cost_category_id=cost_category_id,
     )
     db.add(participation)
     db.commit()
@@ -418,7 +436,10 @@ def update_participation(
     participation = db.get(Participation, participation_id)
     if participation is None or participation.task_id != task_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Запись об участии не найдена")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("cost_category_id") is not None:
+        _validate_cost_category(db, data["cost_category_id"])
+    for field, value in data.items():
         setattr(participation, field, value)
     db.commit()
     db.refresh(participation)

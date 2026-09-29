@@ -14,6 +14,8 @@ export function getSettings() {
   return api.get<SystemSettings>('/settings').then((r) => r.data)
 }
 
-export function updateSettings(currency_code: string) {
-  return api.patch<SystemSettings>('/settings', { currency_code }).then((r) => r.data)
+export function updateSettings(
+  payload: Partial<{ currency_code: string; default_salary_cost_category_id: number | null }>,
+) {
+  return api.patch<SystemSettings>('/settings', payload).then((r) => r.data)
 }

@@ -9,7 +9,11 @@ interface SettingsContextValue {
   formatMoney: (value: string | number) => string
 }
 
-const DEFAULT_SETTINGS: SystemSettings = { currency_code: 'RUB', currency_symbol: '₽' }
+const DEFAULT_SETTINGS: SystemSettings = {
+  currency_code: 'RUB',
+  currency_symbol: '₽',
+  default_salary_cost_category_id: null,
+}
 
 const SettingsContext = createContext<SettingsContextValue | null>(null)
 
