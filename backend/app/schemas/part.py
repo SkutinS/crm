@@ -1,6 +1,7 @@
+from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PartBase(BaseModel):
@@ -12,7 +13,7 @@ class PartBase(BaseModel):
 
 
 class PartCreate(PartBase):
-    pass
+    document_date: date = Field(default_factory=date.today)
 
 
 class PartUpdate(BaseModel):
@@ -21,6 +22,7 @@ class PartUpdate(BaseModel):
     quantity: Decimal | None = None
     price_per_unit: Decimal | None = None
     purchase_price: Decimal | None = None
+    document_date: date | None = None
 
 
 class PartOut(PartBase):
@@ -30,3 +32,4 @@ class PartOut(PartBase):
     task_id: int
     amount: Decimal
     margin: Decimal
+    document_date: date | None

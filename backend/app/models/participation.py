@@ -1,6 +1,7 @@
+from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Numeric
+from sqlalchemy import Date, ForeignKey, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -25,6 +26,7 @@ class Participation(Base):
 
     hours: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    paid_at: Mapped[date | None] = mapped_column(Date)
 
     task = relationship("Task", back_populates="participations")
     user = relationship("User")

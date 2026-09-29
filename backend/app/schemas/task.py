@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.schemas.client import ClientOut
 from app.schemas.common import UtcDateTime
-from app.schemas.money_item import MoneyItemOut
+from app.schemas.money_item import ExpenseOut, IncomeOut
 from app.schemas.part import PartOut
 from app.schemas.participation import ParticipationOut
 from app.schemas.task_stage import TaskStageOut
@@ -67,8 +67,8 @@ class TaskDetail(BaseModel):
     assignments: list[TaskAssignmentOut]
     works: list[WorkOut]
     parts: list[PartOut]
-    expenses: list[MoneyItemOut]
-    incomes: list[MoneyItemOut]
+    expenses: list[ExpenseOut]
+    incomes: list[IncomeOut]
     participations: list[ParticipationOut]
     # filled in by _task_detail() after validation
     invoice_total: Decimal = Decimal("0")

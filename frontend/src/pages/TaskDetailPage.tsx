@@ -18,12 +18,12 @@ import {
   Title,
   Center,
 } from '@mantine/core'
-import { DateTimePicker } from '@mantine/dates'
+import { DateInput, DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconChevronDown, IconChevronUp, IconEdit, IconPlus, IconTrash } from '@tabler/icons-react'
-import { useEffect, useState, type FocusEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiErrorMessage } from '../api/client'
 import { listPartCatalog, listServiceCatalog } from '../api/catalog'
@@ -51,10 +51,13 @@ import {
   updatePart,
   updateTask,
   updateWork,
+  type MoneyItemPayload,
   type PartPayload,
   type WorkPayload,
 } from '../api/tasks'
 import type {
+  CostCategory,
+  IncomeCategory,
   MoneyItem,
   Part,
   PartCatalogItem,
@@ -65,19 +68,15 @@ import type {
   User,
   Work,
 } from '../api/types'
+import { listCostCategories, listIncomeCategories } from '../api/referenceCatalogs'
 import { listUsers } from '../api/users'
 import { CatalogPicker } from '../components/CatalogPicker'
 import { StageSelect } from '../components/StageSelect'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
-
-// Mantine's NumberInput keeps the initial 0 in place and inserts typed
-// digits next to it instead of replacing it. Selecting the whole value on
-// focus makes the first keystroke overwrite it, like a normal spreadsheet
-// cell.
-function selectOnFocus(e: FocusEvent<HTMLInputElement>) {
-  e.currentTarget.select()
-}
+import { categoryOptions } from '../utils/categoryOptions'
+import { formatDateOnly, parseDateOnly, toDateOnly } from '../utils/dateOnly'
+import { selectOnFocus } from '../utils/selectOnFocus'
 
 // ---- Inline-editable table cells (Works/Parts rows are edited directly in
 // the table instead of through a separate form) ----
@@ -150,6 +149,29 @@ function InlineNumberCell({
   )
 }
 
+function InlineDateCell({
+  value,
+  onCommit,
+  width = 130,
+  clearable = false,
+}: {
+  value: string | null
+  onCommit: (value: string | null) => void
+  width?: number
+  clearable?: boolean
+}) {
+  return (
+    <DateInput
+      size="xs"
+      w={width}
+      valueFormat="DD.MM.YYYY"
+      clearable={clearable}
+      value={value ? parseDateOnly(value) : null}
+      onChange={(d) => onCommit(d ? toDateOnly(d) : null)}
+    />
+  )
+}
+
 function FinanceStat({
   label,
   value,
@@ -185,6 +207,8 @@ export function TaskDetailPage() {
   const [users, setUsers] = useState<User[]>([])
   const [serviceCatalog, setServiceCatalog] = useState<ServiceCatalogItem[]>([])
   const [partCatalog, setPartCatalog] = useState<PartCatalogItem[]>([])
+  const [costCategories, setCostCategories] = useState<CostCategory[]>([])
+  const [incomeCategories, setIncomeCategories] = useState<IncomeCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [financeOpened, { toggle: toggleFinance }] = useDisclosure(false)
 
@@ -200,6 +224,8 @@ export function TaskDetailPage() {
       listUsers().then(setUsers),
       listServiceCatalog().then(setServiceCatalog),
       listPartCatalog().then(setPartCatalog),
+      listCostCategories().then(setCostCategories),
+      listIncomeCategories().then(setIncomeCategories),
     ]).finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId])
@@ -329,6 +355,8 @@ export function TaskDetailPage() {
           hint="Деньги, фактически полученные от клиента по этой задаче"
           taskId={taskId}
           items={task.incomes}
+          categories={incomeCategories}
+          categoryLabel="Статья дохода"
           addFn={addIncome}
           updateFn={updateIncome}
           deleteFn={deleteIncome}
@@ -339,6 +367,8 @@ export function TaskDetailPage() {
           title="Расходы"
           taskId={taskId}
           items={task.expenses}
+          categories={costCategories}
+          categoryLabel="Статья затрат"
           addFn={addExpense}
           updateFn={updateExpense}
           deleteFn={deleteExpense}
@@ -754,11 +784,25 @@ function PartsSection({
   const [opened, { open, close }] = useDisclosure(false)
   const [marginOpened, { toggle: toggleMargin }] = useDisclosure(false)
   const form = useForm({
-    initialValues: { catalog_item_id: null as number | null, name: '', quantity: 1, price_per_unit: 0, purchase_price: 0 },
+    initialValues: {
+      catalog_item_id: null as number | null,
+      name: '',
+      quantity: 1,
+      price_per_unit: 0,
+      purchase_price: 0,
+      document_date: new Date(),
+    },
   })
 
   function openCreate() {
-    form.setValues({ catalog_item_id: null, name: '', quantity: 1, price_per_unit: 0, purchase_price: 0 })
+    form.setValues({
+      catalog_item_id: null,
+      name: '',
+      quantity: 1,
+      price_per_unit: 0,
+      purchase_price: 0,
+      document_date: new Date(),
+    })
     open()
   }
 
@@ -778,6 +822,7 @@ function PartsSection({
       quantity: String(values.quantity),
       price_per_unit: String(values.price_per_unit),
       purchase_price: String(values.purchase_price),
+      document_date: toDateOnly(values.document_date),
     }
     try {
       await addPart(taskId, payload)
@@ -822,6 +867,7 @@ function PartsSection({
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Наименование</Table.Th>
+            <Table.Th>Дата</Table.Th>
             <Table.Th>Кол-во</Table.Th>
             <Table.Th>Цена продажи</Table.Th>
             <Table.Th>Цена закупки</Table.Th>
@@ -835,6 +881,12 @@ function PartsSection({
             <Table.Tr key={p.id}>
               <Table.Td>
                 <InlineTextCell value={p.name} width={180} onCommit={(v) => savePart(p.id, { name: v })} />
+              </Table.Td>
+              <Table.Td>
+                <InlineDateCell
+                  value={p.document_date}
+                  onCommit={(v) => v && savePart(p.id, { document_date: v })}
+                />
               </Table.Td>
               <Table.Td>
                 <InlineNumberCell
@@ -867,7 +919,7 @@ function PartsSection({
           ))}
           {parts.length === 0 && (
             <Table.Tr>
-              <Table.Td colSpan={7}>
+              <Table.Td colSpan={8}>
                 <Text c="dimmed" size="sm" ta="center" py="sm">
                   Запчастей пока нет
                 </Text>
@@ -909,6 +961,7 @@ function PartsSection({
           <Stack>
             <CatalogPicker items={catalog} value={form.values.catalog_item_id} onChange={handleCatalogPick} />
             <TextInput label="Наименование" required {...form.getInputProps('name')} />
+            <DateInput label="Дата" required valueFormat="DD.MM.YYYY" {...form.getInputProps('document_date')} />
             <NumberInput
               label="Количество"
               min={0}
@@ -948,6 +1001,8 @@ function MoneyItemsSection({
   hint,
   taskId,
   items,
+  categories,
+  categoryLabel,
   addFn,
   updateFn,
   deleteFn,
@@ -958,23 +1013,32 @@ function MoneyItemsSection({
   hint?: string
   taskId: number
   items: MoneyItem[]
-  addFn: (taskId: number, payload: { description: string; amount: string }) => Promise<MoneyItem>
-  updateFn: (taskId: number, id: number, payload: Partial<{ description: string; amount: string }>) => Promise<MoneyItem>
+  categories: { id: number; name: string; is_active: boolean }[]
+  categoryLabel: string
+  addFn: (taskId: number, payload: MoneyItemPayload) => Promise<MoneyItem>
+  updateFn: (taskId: number, id: number, payload: Partial<MoneyItemPayload>) => Promise<MoneyItem>
   deleteFn: (taskId: number, id: number) => Promise<unknown>
   refresh: () => Promise<void>
   isAdmin: boolean
 }) {
   const { formatMoney } = useSettings()
   const [opened, { open, close }] = useDisclosure(false)
-  const form = useForm({ initialValues: { description: '', amount: 0 } })
+  const form = useForm({
+    initialValues: { description: '', amount: 0, category_id: '' as string, document_date: new Date() },
+  })
 
   function openCreate() {
-    form.setValues({ description: '', amount: 0 })
+    form.setValues({ description: '', amount: 0, category_id: '', document_date: new Date() })
     open()
   }
 
   async function handleSubmit(values: typeof form.values) {
-    const payload = { description: values.description, amount: String(values.amount) }
+    const payload: MoneyItemPayload = {
+      description: values.description,
+      amount: String(values.amount),
+      category_id: Number(values.category_id),
+      document_date: toDateOnly(values.document_date),
+    }
     try {
       await addFn(taskId, payload)
       close()
@@ -984,7 +1048,7 @@ function MoneyItemsSection({
     }
   }
 
-  async function saveItem(id: number, payload: Partial<{ description: string; amount: string }>) {
+  async function saveItem(id: number, payload: Partial<MoneyItemPayload>) {
     try {
       await updateFn(taskId, id, payload)
       await refresh()
@@ -1026,6 +1090,8 @@ function MoneyItemsSection({
           <Table.Tr>
             <Table.Th>Описание</Table.Th>
             <Table.Th>Сумма</Table.Th>
+            <Table.Th>{categoryLabel}</Table.Th>
+            <Table.Th>Дата</Table.Th>
             {isAdmin && <Table.Th />}
           </Table.Tr>
         </Table.Thead>
@@ -1050,6 +1116,26 @@ function MoneyItemsSection({
                   formatMoney(i.amount)
                 )}
               </Table.Td>
+              <Table.Td>
+                {isAdmin ? (
+                  <Select
+                    size="xs"
+                    w={170}
+                    data={categoryOptions(categories, i.category_id)}
+                    value={i.category_id ? String(i.category_id) : null}
+                    onChange={(v) => v && saveItem(i.id, { category_id: Number(v) })}
+                  />
+                ) : (
+                  (i.category?.name ?? '—')
+                )}
+              </Table.Td>
+              <Table.Td>
+                {isAdmin ? (
+                  <InlineDateCell value={i.document_date} onCommit={(v) => v && saveItem(i.id, { document_date: v })} />
+                ) : (
+                  formatDateOnly(i.document_date)
+                )}
+              </Table.Td>
               {isAdmin && (
                 <Table.Td>
                   <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(i.id)}>
@@ -1061,7 +1147,7 @@ function MoneyItemsSection({
           ))}
           {items.length === 0 && (
             <Table.Tr>
-              <Table.Td colSpan={isAdmin ? 3 : 2}>
+              <Table.Td colSpan={isAdmin ? 5 : 4}>
                 <Text c="dimmed" size="sm" ta="center" py="sm">
                   Записей пока нет
                 </Text>
@@ -1088,6 +1174,14 @@ function MoneyItemsSection({
               onFocus={selectOnFocus}
               {...form.getInputProps('amount')}
             />
+            <Select
+              label={categoryLabel}
+              placeholder="Выберите статью"
+              required
+              data={categoryOptions(categories, null)}
+              {...form.getInputProps('category_id')}
+            />
+            <DateInput label="Дата" required valueFormat="DD.MM.YYYY" {...form.getInputProps('document_date')} />
             <Button type="submit">Сохранить</Button>
           </Stack>
         </form>
@@ -1150,7 +1244,10 @@ function ParticipationsSection({
     }
   }
 
-  async function saveParticipation(id: number, payload: Partial<{ hours: string | null; amount: string }>) {
+  async function saveParticipation(
+    id: number,
+    payload: Partial<{ hours: string | null; amount: string; paid_at: string | null }>,
+  ) {
     try {
       await updateParticipation(taskId, id, payload)
       await refresh()
@@ -1189,6 +1286,7 @@ function ParticipationsSection({
             <Table.Th>Тип ставки</Table.Th>
             <Table.Th>Часы</Table.Th>
             <Table.Th>Начислено</Table.Th>
+            <Table.Th>Дата выплаты</Table.Th>
             {isAdmin && <Table.Th />}
           </Table.Tr>
         </Table.Thead>
@@ -1218,6 +1316,17 @@ function ParticipationsSection({
                   formatMoney(p.amount)
                 )}
               </Table.Td>
+              <Table.Td>
+                {isAdmin ? (
+                  <InlineDateCell
+                    value={p.paid_at}
+                    onCommit={(v) => saveParticipation(p.id, { paid_at: v })}
+                    clearable
+                  />
+                ) : (
+                  formatDateOnly(p.paid_at)
+                )}
+              </Table.Td>
               {isAdmin && (
                 <Table.Td>
                   <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(p.id)}>
@@ -1229,7 +1338,7 @@ function ParticipationsSection({
           ))}
           {participations.length === 0 && (
             <Table.Tr>
-              <Table.Td colSpan={isAdmin ? 5 : 4}>
+              <Table.Td colSpan={isAdmin ? 6 : 5}>
                 <Text c="dimmed" size="sm" ta="center" py="sm">
                   Участие пока не отмечено
                 </Text>

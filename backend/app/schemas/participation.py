@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
@@ -9,11 +10,13 @@ class ParticipationCreate(BaseModel):
     user_id: int
     hours: Decimal | None = None
     amount: Decimal | None = None  # if omitted, computed server-side (hourly only)
+    paid_at: date | None = None
 
 
 class ParticipationUpdate(BaseModel):
     hours: Decimal | None = None
     amount: Decimal | None = None
+    paid_at: date | None = None
 
 
 class ParticipationOut(BaseModel):
@@ -24,6 +27,7 @@ class ParticipationOut(BaseModel):
     user_id: int
     hours: Decimal | None
     amount: Decimal
+    paid_at: date | None
     user: UserOut
 
 

@@ -1,6 +1,7 @@
+from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Numeric, String
+from sqlalchemy import Date, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -17,6 +18,7 @@ class Part(Base):
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False, default=1)
     price_per_unit: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     purchase_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    document_date: Mapped[date | None] = mapped_column(Date)
 
     task = relationship("Task", back_populates="parts")
     catalog_item = relationship("PartCatalogItem")

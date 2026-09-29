@@ -93,6 +93,7 @@ export interface PartPayload {
   quantity: string
   price_per_unit: string
   purchase_price: string
+  document_date?: string
 }
 
 export function addPart(taskId: number, payload: PartPayload) {
@@ -112,6 +113,8 @@ export function deletePart(taskId: number, partId: number) {
 export interface MoneyItemPayload {
   description: string
   amount: string
+  category_id: number
+  document_date?: string
 }
 
 export function addExpense(taskId: number, payload: MoneyItemPayload) {
@@ -153,7 +156,7 @@ export function addParticipation(taskId: number, user_id: number, hours: string 
 export function updateParticipation(
   taskId: number,
   id: number,
-  payload: Partial<{ hours: string | null; amount: string }>,
+  payload: Partial<{ hours: string | null; amount: string; paid_at: string | null }>,
 ) {
   return api.patch<Participation>(`/tasks/${taskId}/participations/${id}`, payload).then((r) => r.data)
 }

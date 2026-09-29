@@ -60,6 +60,19 @@ export interface Part {
   purchase_price: string
   amount: string
   margin: string
+  document_date: string | null
+}
+
+export interface CostCategory {
+  id: number
+  name: string
+  is_active: boolean
+}
+
+export interface IncomeCategory {
+  id: number
+  name: string
+  is_active: boolean
 }
 
 export interface MoneyItem {
@@ -67,6 +80,9 @@ export interface MoneyItem {
   task_id: number
   description: string
   amount: string
+  category_id: number | null
+  category: { id: number; name: string; is_active: boolean } | null
+  document_date: string | null
 }
 
 export interface Participation {
@@ -75,6 +91,7 @@ export interface Participation {
   user_id: number
   hours: string | null
   amount: string
+  paid_at: string | null
   user: User
 }
 

@@ -3,17 +3,10 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react'
-import { useState, type FocusEvent } from 'react'
+import { useState } from 'react'
 import { apiErrorMessage } from '../api/client'
 import { descendantIds, flattenTree } from '../utils/catalogTree'
-
-// Mantine's NumberInput keeps the initial 0 in place and inserts typed
-// digits next to it instead of replacing it. Selecting the whole value on
-// focus makes the first keystroke overwrite it, like a normal spreadsheet
-// cell.
-function selectOnFocus(e: FocusEvent<HTMLInputElement>) {
-  e.currentTarget.select()
-}
+import { selectOnFocus } from '../utils/selectOnFocus'
 
 interface CatalogNode {
   id: number

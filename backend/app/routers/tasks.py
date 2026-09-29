@@ -10,11 +10,12 @@ from app.models.expense import Expense
 from app.models.income import Income
 from app.models.part import Part
 from app.models.participation import Participation
+from app.models.reference_catalog import CostCategory, IncomeCategory
 from app.models.task import Task, TaskAssignment
 from app.models.task_stage import TaskStage
 from app.models.user import User
 from app.models.work import Work
-from app.schemas.money_item import MoneyItemCreate, MoneyItemOut, MoneyItemUpdate
+from app.schemas.money_item import ExpenseOut, IncomeOut, MoneyItemCreate, MoneyItemUpdate
 from app.schemas.part import PartCreate, PartOut, PartUpdate
 from app.schemas.participation import (
     ParticipationCreate,
@@ -42,8 +43,8 @@ TASK_LOAD_OPTIONS = (
     selectinload(Task.assignments).selectinload(TaskAssignment.user),
     selectinload(Task.works),
     selectinload(Task.parts),
-    selectinload(Task.expenses),
-    selectinload(Task.incomes),
+    selectinload(Task.expenses).selectinload(Expense.category),
+    selectinload(Task.incomes).selectinload(Income.category),
     selectinload(Task.participations).selectinload(Participation.user),
 )
 
@@ -261,10 +262,19 @@ def delete_part(task_id: int, part_id: int, user: CurrentUser, db: Session = Dep
 # ---- Expenses ----
 
 
-@router.post("/{task_id}/expenses", response_model=MoneyItemOut, status_code=status.HTTP_201_CREATED)
+def _validate_cost_category(db: Session, category_id: int) -> None:
+    category = db.get(CostCategory, category_id)
+    if category is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Статья затрат не найдена")
+    if not category.is_active:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Статья затрат неактивна")
+
+
+@router.post("/{task_id}/expenses", response_model=ExpenseOut, status_code=status.HTTP_201_CREATED)
 def add_expense(task_id: int, payload: MoneyItemCreate, _: AdminUser, db: Session = Depends(get_db)) -> Expense:
     if db.get(Task, task_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+    _validate_cost_category(db, payload.category_id)
     expense = Expense(task_id=task_id, **payload.model_dump())
     db.add(expense)
     db.commit()
@@ -272,14 +282,17 @@ def add_expense(task_id: int, payload: MoneyItemCreate, _: AdminUser, db: Sessio
     return expense
 
 
-@router.patch("/{task_id}/expenses/{expense_id}", response_model=MoneyItemOut)
+@router.patch("/{task_id}/expenses/{expense_id}", response_model=ExpenseOut)
 def update_expense(
     task_id: int, expense_id: int, payload: MoneyItemUpdate, _: AdminUser, db: Session = Depends(get_db)
 ) -> Expense:
     expense = db.get(Expense, expense_id)
     if expense is None or expense.task_id != task_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Расход не найден")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("category_id") is not None:
+        _validate_cost_category(db, data["category_id"])
+    for field, value in data.items():
         setattr(expense, field, value)
     db.commit()
     db.refresh(expense)
@@ -298,10 +311,19 @@ def delete_expense(task_id: int, expense_id: int, _: AdminUser, db: Session = De
 # ---- Incomes ----
 
 
-@router.post("/{task_id}/incomes", response_model=MoneyItemOut, status_code=status.HTTP_201_CREATED)
+def _validate_income_category(db: Session, category_id: int) -> None:
+    category = db.get(IncomeCategory, category_id)
+    if category is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Статья доходов не найдена")
+    if not category.is_active:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Статья доходов неактивна")
+
+
+@router.post("/{task_id}/incomes", response_model=IncomeOut, status_code=status.HTTP_201_CREATED)
 def add_income(task_id: int, payload: MoneyItemCreate, _: AdminUser, db: Session = Depends(get_db)) -> Income:
     if db.get(Task, task_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+    _validate_income_category(db, payload.category_id)
     income = Income(task_id=task_id, **payload.model_dump())
     db.add(income)
     db.commit()
@@ -309,14 +331,17 @@ def add_income(task_id: int, payload: MoneyItemCreate, _: AdminUser, db: Session
     return income
 
 
-@router.patch("/{task_id}/incomes/{income_id}", response_model=MoneyItemOut)
+@router.patch("/{task_id}/incomes/{income_id}", response_model=IncomeOut)
 def update_income(
     task_id: int, income_id: int, payload: MoneyItemUpdate, _: AdminUser, db: Session = Depends(get_db)
 ) -> Income:
     income = db.get(Income, income_id)
     if income is None or income.task_id != task_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Доход не найден")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("category_id") is not None:
+        _validate_income_category(db, data["category_id"])
+    for field, value in data.items():
         setattr(income, field, value)
     db.commit()
     db.refresh(income)
@@ -367,7 +392,9 @@ def add_participation(
         hours = hours if hours is not None else suggested_hours
         amount = suggested_amount
 
-    participation = Participation(task_id=task_id, user_id=payload.user_id, hours=hours, amount=amount)
+    participation = Participation(
+        task_id=task_id, user_id=payload.user_id, hours=hours, amount=amount, paid_at=payload.paid_at
+    )
     db.add(participation)
     db.commit()
     db.refresh(participation)
