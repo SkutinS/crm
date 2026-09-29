@@ -3,8 +3,16 @@ import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-export function ProtectedRoute({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
-  const { user, loading, isAdmin } = useAuth()
+export function ProtectedRoute({
+  children,
+  adminOnly = false,
+  cashOnly = false,
+}: {
+  children: ReactNode
+  adminOnly?: boolean
+  cashOnly?: boolean
+}) {
+  const { user, loading, isAdmin, canAccessCash } = useAuth()
 
   if (loading) {
     return (
@@ -16,6 +24,7 @@ export function ProtectedRoute({ children, adminOnly = false }: { children: Reac
 
   if (!user) return <Navigate to="/login" replace />
   if (adminOnly && !isAdmin) return <Navigate to="/tasks" replace />
+  if (cashOnly && !canAccessCash) return <Navigate to="/tasks" replace />
 
   return <>{children}</>
 }

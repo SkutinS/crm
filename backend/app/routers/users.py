@@ -30,6 +30,7 @@ def create_user(payload: UserCreate, _: AdminUser, db: Session = Depends(get_db)
         rate_type=payload.rate_type,
         rate_amount=payload.rate_amount,
         is_active=payload.is_active,
+        can_access_cash=payload.can_access_cash,
     )
     db.add(user)
     db.commit()

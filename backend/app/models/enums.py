@@ -19,3 +19,8 @@ class TaskParticipantRole(str, enum.Enum):
 class WorkStatus(str, enum.Enum):
     planned = "planned"
     done = "done"
+
+
+class CashDocumentType(str, enum.Enum):
+    income = "income"
+    expense = "expense"

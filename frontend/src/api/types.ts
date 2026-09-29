@@ -11,6 +11,7 @@ export interface User {
   rate_type: RateType
   rate_amount: string
   is_active: boolean
+  can_access_cash: boolean
   created_at: string
 }
 
@@ -152,4 +153,36 @@ export interface PartCatalogItem {
 export interface SystemSettings {
   currency_code: string
   currency_symbol: string
+}
+
+export type CashDocumentType = 'income' | 'expense'
+
+export interface CashDocument {
+  id: number
+  register_id: number
+  doc_type: CashDocumentType
+  amount: string
+  document_date: string
+  description: string | null
+  cost_category_id: number | null
+  income_category_id: number | null
+  created_at: string
+}
+
+export interface CashJournalEntry {
+  source: 'cash_document' | 'task_expense' | 'task_income'
+  source_id: number
+  doc_type: CashDocumentType
+  amount: string
+  document_date: string | null
+  description: string | null
+  category_name: string | null
+  cost_category_id: number | null
+  income_category_id: number | null
+  task: { id: number; title: string } | null
+}
+
+export interface CashSummary {
+  balance: string
+  entries: CashJournalEntry[]
 }

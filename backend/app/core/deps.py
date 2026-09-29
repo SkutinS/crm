@@ -46,6 +46,15 @@ def require_admin(user: CurrentUser) -> User:
 AdminUser = Annotated[User, Depends(require_admin)]
 
 
+def require_cash_access(user: CurrentUser) -> User:
+    if user.role != UserRole.admin and not user.can_access_cash:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Нет доступа к разделу «Касса»")
+    return user
+
+
+CashUser = Annotated[User, Depends(require_cash_access)]
+
+
 def user_can_access_task(user: User, task: Task) -> bool:
     if user.role == UserRole.admin:
         return True

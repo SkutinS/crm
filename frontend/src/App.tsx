@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { CalendarPage } from './pages/CalendarPage'
+import { CashPage } from './pages/CashPage'
 import { CatalogPage } from './pages/CatalogPage'
 import { ClientsPage } from './pages/ClientsPage'
 import { LoginPage } from './pages/LoginPage'
@@ -71,6 +72,16 @@ export default function App() {
           <ProtectedRoute adminOnly>
             <Layout>
               <CatalogPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cash"
+        element={
+          <ProtectedRoute cashOnly>
+            <Layout>
+              <CashPage />
             </Layout>
           </ProtectedRoute>
         }

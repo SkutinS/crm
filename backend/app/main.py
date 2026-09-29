@@ -2,7 +2,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routers import auth, calendar, catalog, clients, settings as settings_router, task_stages, tasks, users
+from app.routers import (
+    auth,
+    calendar,
+    cash,
+    catalog,
+    clients,
+    reference_catalogs,
+    settings as settings_router,
+    task_stages,
+    tasks,
+    users,
+)
 
 settings = get_settings()
 
@@ -23,6 +34,8 @@ app.include_router(task_stages.router)
 app.include_router(tasks.router)
 app.include_router(calendar.router)
 app.include_router(catalog.router)
+app.include_router(reference_catalogs.router)
+app.include_router(cash.router)
 app.include_router(settings_router.router)
 
 

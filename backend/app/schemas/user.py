@@ -13,6 +13,7 @@ class UserBase(BaseModel):
     rate_type: RateType
     rate_amount: Decimal
     is_active: bool = True
+    can_access_cash: bool = False
 
 
 class UserCreate(UserBase):
@@ -26,6 +27,7 @@ class UserUpdate(BaseModel):
     rate_type: RateType | None = None
     rate_amount: Decimal | None = None
     is_active: bool | None = None
+    can_access_cash: bool | None = None
     password: str | None = None
 
 
@@ -39,4 +41,5 @@ class UserOut(BaseModel):
     rate_type: RateType
     rate_amount: Decimal
     is_active: bool
+    can_access_cash: bool
     created_at: UtcDateTime

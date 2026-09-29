@@ -8,6 +8,7 @@ import {
   IconSettings,
   IconUsers,
   IconUsersGroup,
+  IconWallet,
 } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
@@ -15,12 +16,13 @@ import { useAuth } from '../context/AuthContext'
 
 export function Layout({ children }: { children: ReactNode }) {
   const [opened, { toggle }] = useDisclosure()
-  const { user, logout, isAdmin } = useAuth()
+  const { user, logout, isAdmin, canAccessCash } = useAuth()
   const location = useLocation()
 
   const links = [
     { to: '/tasks', label: 'Задачи', icon: IconChecklist },
     { to: '/calendar', label: 'Календарь', icon: IconCalendar },
+    ...(canAccessCash ? [{ to: '/cash', label: 'Касса', icon: IconWallet }] : []),
     ...(isAdmin ? [{ to: '/clients', label: 'Клиенты', icon: IconUsersGroup }] : []),
     ...(isAdmin ? [{ to: '/users', label: 'Сотрудники', icon: IconUsers }] : []),
     ...(isAdmin ? [{ to: '/catalog', label: 'Справочники', icon: IconBooks }] : []),

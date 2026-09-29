@@ -18,18 +18,11 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react'
-import { useEffect, useState, type FocusEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { apiErrorMessage } from '../api/client'
 import type { User } from '../api/types'
 import { type UserPayload, createUser, deleteUser, listUsers, updateUser } from '../api/users'
-
-// Mantine's NumberInput keeps the initial 0 in place and inserts typed
-// digits next to it instead of replacing it. Selecting the whole value on
-// focus makes the first keystroke overwrite it, like a normal spreadsheet
-// cell.
-function selectOnFocus(e: FocusEvent<HTMLInputElement>) {
-  e.currentTarget.select()
-}
+import { selectOnFocus } from '../utils/selectOnFocus'
 
 interface FormValues {
   full_name: string
@@ -38,6 +31,7 @@ interface FormValues {
   rate_type: 'hourly' | 'fixed'
   rate_amount: number
   is_active: boolean
+  can_access_cash: boolean
   password: string
 }
 
@@ -48,6 +42,7 @@ const EMPTY: FormValues = {
   rate_type: 'hourly',
   rate_amount: 0,
   is_active: true,
+  can_access_cash: false,
   password: '',
 }
 
@@ -83,6 +78,7 @@ export function UsersPage() {
       rate_type: user.rate_type,
       rate_amount: Number(user.rate_amount),
       is_active: user.is_active,
+      can_access_cash: user.can_access_cash,
       password: '',
     })
     open()
@@ -96,6 +92,7 @@ export function UsersPage() {
       rate_type: values.rate_type,
       rate_amount: String(values.rate_amount),
       is_active: values.is_active,
+      can_access_cash: values.can_access_cash,
     }
     if (values.password) payload.password = values.password
 
@@ -152,9 +149,16 @@ export function UsersPage() {
                 {u.rate_amount} ₽ {u.rate_type === 'hourly' ? '/ч' : '(фикс.)'}
               </Table.Td>
               <Table.Td>
-                <Badge color={u.is_active ? 'green' : 'gray'} variant="light">
-                  {u.is_active ? 'активен' : 'неактивен'}
-                </Badge>
+                <Group gap={4}>
+                  <Badge color={u.is_active ? 'green' : 'gray'} variant="light">
+                    {u.is_active ? 'активен' : 'неактивен'}
+                  </Badge>
+                  {u.role === 'employee' && u.can_access_cash && (
+                    <Badge color="blue" variant="light">
+                      касса
+                    </Badge>
+                  )}
+                </Group>
               </Table.Td>
               <Table.Td>
                 <Group gap="xs" justify="flex-end">
@@ -216,6 +220,13 @@ export function UsersPage() {
               {...form.getInputProps('rate_amount')}
             />
             <Switch label="Активен" {...form.getInputProps('is_active', { type: 'checkbox' })} />
+            {form.values.role === 'employee' && (
+              <Switch
+                label="Доступ к кассе"
+                description="Может создавать и видеть кассовые документы, не будучи администратором"
+                {...form.getInputProps('can_access_cash', { type: 'checkbox' })}
+              />
+            )}
             <Button type="submit" mt="sm">
               Сохранить
             </Button>

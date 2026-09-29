@@ -8,6 +8,7 @@ export interface UserPayload {
   rate_type: RateType
   rate_amount: string
   is_active: boolean
+  can_access_cash: boolean
   password?: string
 }
 
