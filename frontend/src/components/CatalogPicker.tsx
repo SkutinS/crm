@@ -9,6 +9,9 @@ interface CatalogPickerProps<T extends { id: number; parent_id: number | null; n
   canCreate?: boolean
   onCreate?: (name: string) => Promise<T>
   onCreated?: (item: T) => void
+  label?: string
+  size?: string
+  w?: number | string
 }
 
 export function CatalogPicker<T extends { id: number; parent_id: number | null; name: string }>({
@@ -19,13 +22,16 @@ export function CatalogPicker<T extends { id: number; parent_id: number | null; 
   canCreate = false,
   onCreate,
   onCreated,
+  label = 'Из справочника',
+  size,
+  w,
 }: CatalogPickerProps<T>) {
   const rows = flattenTree(items)
   const data = rows.map((r) => ({ value: String(r.item.id), label: r.path }))
 
   return (
     <CreatableSelect
-      label="Из справочника"
+      label={label}
       placeholder={placeholder}
       data={data}
       value={value !== null ? String(value) : null}
@@ -48,6 +54,8 @@ export function CatalogPicker<T extends { id: number; parent_id: number | null; 
       }}
       searchable
       clearable
+      size={size}
+      w={w}
     />
   )
 }

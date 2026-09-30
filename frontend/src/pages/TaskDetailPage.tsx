@@ -633,6 +633,15 @@ function WorksSection({
     }
   }
 
+  function handleInlineCatalogPick(workId: number, id: number | null, item: ServiceCatalogItem | null) {
+    const payload: Partial<WorkPayload> = { catalog_item_id: id }
+    if (item) {
+      payload.description = item.name
+      if (item.default_price != null) payload.service_price = String(item.default_price)
+    }
+    saveWork(workId, payload)
+  }
+
   async function handleSubmit(values: typeof form.values) {
     const payload = {
       catalog_item_id: values.catalog_item_id,
@@ -685,6 +694,7 @@ function WorksSection({
       <Table verticalSpacing="xs">
         <Table.Thead>
           <Table.Tr>
+            <Table.Th>Услуга</Table.Th>
             <Table.Th>Описание</Table.Th>
             <Table.Th>Начало</Table.Th>
             <Table.Th>Окончание</Table.Th>
@@ -697,6 +707,19 @@ function WorksSection({
         <Table.Tbody>
           {works.map((w) => (
             <Table.Tr key={w.id}>
+              <Table.Td>
+                <CatalogPicker
+                  items={catalog}
+                  value={w.catalog_item_id}
+                  onChange={(id, item) => handleInlineCatalogPick(w.id, id, item)}
+                  canCreate={isAdmin}
+                  onCreate={(name) => createServiceCatalogItem({ parent_id: null, name, default_price: null })}
+                  onCreated={onCatalogCreated}
+                  label=""
+                  size="xs"
+                  w={170}
+                />
+              </Table.Td>
               <Table.Td>
                 <InlineTextCell
                   value={w.description}
@@ -761,7 +784,7 @@ function WorksSection({
           ))}
           {works.length === 0 && (
             <Table.Tr>
-              <Table.Td colSpan={7}>
+              <Table.Td colSpan={8}>
                 <Text c="dimmed" size="sm" ta="center" py="sm">
                   Работ пока нет
                 </Text>
@@ -873,6 +896,16 @@ function PartsSection({
     }
   }
 
+  function handleInlineCatalogPick(partId: number, id: number | null, item: PartCatalogItem | null) {
+    const payload: Partial<PartPayload> = { catalog_item_id: id }
+    if (item) {
+      payload.name = item.name
+      if (item.default_sale_price != null) payload.price_per_unit = String(item.default_sale_price)
+      if (item.default_purchase_price != null) payload.purchase_price = String(item.default_purchase_price)
+    }
+    savePart(partId, payload)
+  }
+
   async function handleSubmit(values: typeof form.values) {
     const payload = {
       catalog_item_id: values.catalog_item_id,
@@ -924,6 +957,7 @@ function PartsSection({
       <Table verticalSpacing="xs">
         <Table.Thead>
           <Table.Tr>
+            <Table.Th>Запчасть</Table.Th>
             <Table.Th>Наименование</Table.Th>
             <Table.Th>Дата</Table.Th>
             <Table.Th>Кол-во</Table.Th>
@@ -937,6 +971,21 @@ function PartsSection({
         <Table.Tbody>
           {parts.map((p) => (
             <Table.Tr key={p.id}>
+              <Table.Td>
+                <CatalogPicker
+                  items={catalog}
+                  value={p.catalog_item_id}
+                  onChange={(id, item) => handleInlineCatalogPick(p.id, id, item)}
+                  canCreate={isAdmin}
+                  onCreate={(name) =>
+                    createPartCatalogItem({ parent_id: null, name, default_sale_price: null, default_purchase_price: null })
+                  }
+                  onCreated={onCatalogCreated}
+                  label=""
+                  size="xs"
+                  w={170}
+                />
+              </Table.Td>
               <Table.Td>
                 <InlineTextCell value={p.name} width={180} onCommit={(v) => savePart(p.id, { name: v })} />
               </Table.Td>
@@ -977,7 +1026,7 @@ function PartsSection({
           ))}
           {parts.length === 0 && (
             <Table.Tr>
-              <Table.Td colSpan={8}>
+              <Table.Td colSpan={9}>
                 <Text c="dimmed" size="sm" ta="center" py="sm">
                   Запчастей пока нет
                 </Text>
