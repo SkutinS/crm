@@ -47,7 +47,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         logout,
-        isAdmin: user?.role === 'admin',
+        // senior_admin has every admin right except the cash section —
+        // isAdmin is deliberately broadened for it, canAccessCash is not.
+        isAdmin: user?.role === 'admin' || user?.role === 'senior_admin',
         canAccessCash: user?.role === 'admin' || !!user?.can_access_cash,
       }}
     >

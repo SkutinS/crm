@@ -36,9 +36,13 @@ def get_current_user(
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
+# Roles with full admin-level access everywhere EXCEPT the cash section
+# (see require_cash_access below, which intentionally does not use this set).
+ADMIN_TIER_ROLES = {UserRole.admin, UserRole.senior_admin}
+
 
 def require_admin(user: CurrentUser) -> User:
-    if user.role != UserRole.admin:
+    if user.role not in ADMIN_TIER_ROLES:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Требуются права администратора")
     return user
 
@@ -47,16 +51,22 @@ AdminUser = Annotated[User, Depends(require_admin)]
 
 
 def require_cash_access(user: CurrentUser) -> User:
-    if user.role != UserRole.admin and not user.can_access_cash:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Нет доступа к разделу «Касса»")
-    return user
+    # Deliberately not ADMIN_TIER_ROLES: senior_admin has every other admin
+    # right but must never see the cash section, so only the real `admin`
+    # role is auto-granted access here — same as an employee, senior_admin
+    # has no path to cash access at all (can_access_cash isn't offered to it).
+    if user.role == UserRole.admin:
+        return user
+    if user.role == UserRole.employee and user.can_access_cash:
+        return user
+    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Нет доступа к разделу «Касса»")
 
 
 CashUser = Annotated[User, Depends(require_cash_access)]
 
 
 def user_can_access_task(user: User, task: Task) -> bool:
-    if user.role == UserRole.admin:
+    if user.role in ADMIN_TIER_ROLES:
         return True
     return any(a.user_id == user.id for a in task.assignments)
 

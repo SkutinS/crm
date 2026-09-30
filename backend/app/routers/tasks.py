@@ -3,9 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
-from app.core.deps import AdminUser, CurrentUser, get_accessible_task
+from app.core.deps import ADMIN_TIER_ROLES, AdminUser, CurrentUser, get_accessible_task
 from app.core.time_utils import to_naive_utc
-from app.models.enums import UserRole
 from app.models.expense import Expense
 from app.models.income import Income
 from app.models.part import Part
@@ -79,7 +78,7 @@ def list_tasks(
         stmt = stmt.where(Task.stage_id == stage_id)
 
     tasks = list(db.scalars(stmt).unique())
-    if user.role != UserRole.admin:
+    if user.role not in ADMIN_TIER_ROLES:
         tasks = [t for t in tasks if any(a.user_id == user.id for a in t.assignments)]
     return [_task_list_item(t) for t in tasks]
 

@@ -3,6 +3,10 @@ import enum
 
 class UserRole(str, enum.Enum):
     admin = "admin"
+    # Same permissions as admin everywhere except the cash section — see
+    # app.core.deps.require_cash_access, which deliberately does NOT grant
+    # this role automatic cash access the way it does for `admin`.
+    senior_admin = "senior_admin"
     employee = "employee"
 
 

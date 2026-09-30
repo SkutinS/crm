@@ -13,6 +13,7 @@ import {
 import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { roleLabel } from '../utils/roleLabel'
 
 export function Layout({ children }: { children: ReactNode }) {
   const [opened, { toggle }] = useDisclosure()
@@ -41,7 +42,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </Group>
           <Group>
             <Text size="sm" c="dimmed">
-              {user?.full_name} · {user?.role === 'admin' ? 'администратор' : 'сотрудник'}
+              {user?.full_name} · {user ? roleLabel(user.role) : ''}
             </Text>
             <Button variant="subtle" size="xs" leftSection={<IconLogout size={16} />} onClick={logout}>
               Выйти

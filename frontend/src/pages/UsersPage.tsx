@@ -20,14 +20,15 @@ import { notifications } from '@mantine/notifications'
 import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { apiErrorMessage } from '../api/client'
-import type { User } from '../api/types'
+import type { User, UserRole } from '../api/types'
 import { type UserPayload, createUser, deleteUser, listUsers, updateUser } from '../api/users'
+import { roleLabel } from '../utils/roleLabel'
 import { selectOnFocus } from '../utils/selectOnFocus'
 
 interface FormValues {
   full_name: string
   login: string
-  role: 'admin' | 'employee'
+  role: UserRole
   rate_type: 'hourly' | 'fixed'
   rate_amount: number
   is_active: boolean
@@ -144,7 +145,7 @@ export function UsersPage() {
             <Table.Tr key={u.id}>
               <Table.Td>{u.full_name}</Table.Td>
               <Table.Td>{u.login}</Table.Td>
-              <Table.Td>{u.role === 'admin' ? 'Администратор' : 'Сотрудник'}</Table.Td>
+              <Table.Td>{roleLabel(u.role, true)}</Table.Td>
               <Table.Td>
                 {u.rate_amount} ₽ {u.rate_type === 'hourly' ? '/ч' : '(фикс.)'}
               </Table.Td>
@@ -198,6 +199,7 @@ export function UsersPage() {
               label="Роль"
               data={[
                 { value: 'employee', label: 'Сотрудник' },
+                { value: 'senior_admin', label: 'Старший администратор' },
                 { value: 'admin', label: 'Администратор' },
               ]}
               allowDeselect={false}

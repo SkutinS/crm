@@ -6,9 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
-from app.core.deps import CurrentUser
+from app.core.deps import ADMIN_TIER_ROLES, CurrentUser
 from app.core.time_utils import to_naive_utc
-from app.models.enums import UserRole
 from app.models.task import Task
 from app.models.work import Work
 from app.schemas.common import UtcDateTime
@@ -54,7 +53,7 @@ def list_calendar_works(
 
     all_works = list(db.scalars(stmt))
 
-    if user.role != UserRole.admin:
+    if user.role not in ADMIN_TIER_ROLES:
         accessible_task_ids = {
             t.id
             for t in db.scalars(select(Task).options(selectinload(Task.assignments))).unique()

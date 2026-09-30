@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'employee'
+export type UserRole = 'admin' | 'senior_admin' | 'employee'
 export type RateType = 'hourly' | 'fixed'
 export type WorkStatus = 'planned' | 'done'
 export type TaskParticipantRole = 'executor' | 'controller'
