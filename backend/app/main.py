@@ -10,6 +10,7 @@ from app.routers import (
     clients,
     reference_catalogs,
     settings as settings_router,
+    task_groups,
     task_stages,
     tasks,
     users,
@@ -32,6 +33,7 @@ app.include_router(users.router)
 app.include_router(clients.router)
 app.include_router(task_stages.router)
 app.include_router(tasks.router)
+app.include_router(task_groups.router)
 app.include_router(calendar.router)
 app.include_router(catalog.router)
 app.include_router(reference_catalogs.router)

@@ -8,6 +8,7 @@ from app.models.part import Part
 from app.models.reference_catalog import CostCategory, IncomeCategory
 from app.models.settings import SystemSettings
 from app.models.task import Task, TaskAssignment
+from app.models.task_group import TaskGroup
 from app.models.task_stage import TaskStage
 from app.models.user import User
 from app.models.work import Work
@@ -27,6 +28,7 @@ __all__ = [
     "SystemSettings",
     "Task",
     "TaskAssignment",
+    "TaskGroup",
     "TaskStage",
     "User",
     "Work",

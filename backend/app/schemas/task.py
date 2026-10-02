@@ -7,6 +7,7 @@ from app.schemas.common import UtcDateTime
 from app.schemas.money_item import ExpenseOut, IncomeOut
 from app.schemas.part import PartOut
 from app.schemas.participation import ParticipationOut
+from app.schemas.task_group import TaskGroupRef
 from app.schemas.task_stage import TaskStageOut
 from app.schemas.user import UserOut
 from app.schemas.work import WorkOut
@@ -53,8 +54,10 @@ class TaskListItem(BaseModel):
     client: ClientOut
     stage: TaskStageOut
     assignments: list[TaskAssignmentOut]
+    group: TaskGroupRef | None
     # filled in by _task_list_item() after validation, same as TaskDetail
     invoice_total: Decimal = Decimal("0")
+    profit: Decimal = Decimal("0")
 
 
 class TaskDetail(BaseModel):
@@ -67,6 +70,7 @@ class TaskDetail(BaseModel):
     client: ClientOut
     stage: TaskStageOut
     assignments: list[TaskAssignmentOut]
+    group: TaskGroupRef | None
     works: list[WorkOut]
     parts: list[PartOut]
     expenses: list[ExpenseOut]

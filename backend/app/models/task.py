@@ -16,11 +16,15 @@ class Task(Base):
 
     stage_id: Mapped[int] = mapped_column(ForeignKey("task_stages.id", ondelete="RESTRICT"), nullable=False)
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("task_groups.id", ondelete="SET NULL", name="fk_tasks_group_id")
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     client = relationship("Client")
     stage = relationship("TaskStage")
+    group = relationship("TaskGroup", back_populates="tasks")
     assignments = relationship("TaskAssignment", cascade="all, delete-orphan", back_populates="task")
     works = relationship("Work", cascade="all, delete-orphan", back_populates="task")
     parts = relationship("Part", cascade="all, delete-orphan", back_populates="task")

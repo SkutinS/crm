@@ -72,6 +72,7 @@ import { createCostCategory, createIncomeCategory, listCostCategories, listIncom
 import { listUsers } from '../api/users'
 import { CatalogPicker } from '../components/CatalogPicker'
 import { CreatableSelect } from '../components/CreatableSelect'
+import { FinanceStat } from '../components/FinanceStat'
 import { StageSelect } from '../components/StageSelect'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
@@ -201,29 +202,6 @@ function InlineOptionalTextCell({
         if (normalized !== value) onCommit(normalized)
       }}
     />
-  )
-}
-
-function FinanceStat({
-  label,
-  value,
-  formatMoney,
-  color,
-}: {
-  label: string
-  value: string
-  formatMoney: (v: string) => string
-  color?: string
-}) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed">
-        {label}
-      </Text>
-      <Text fw={700} c={color}>
-        {formatMoney(value)}
-      </Text>
-    </div>
   )
 }
 

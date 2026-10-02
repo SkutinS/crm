@@ -40,6 +40,7 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 TASK_LOAD_OPTIONS = (
     selectinload(Task.client),
     selectinload(Task.stage),
+    selectinload(Task.group),
     selectinload(Task.assignments).selectinload(TaskAssignment.user),
     selectinload(Task.works),
     selectinload(Task.parts),
@@ -61,6 +62,7 @@ def _task_detail(task: Task) -> TaskDetail:
 def _task_list_item(task: Task) -> TaskListItem:
     item = TaskListItem.model_validate(task, from_attributes=True)
     item.invoice_total = task_invoice_total(task)
+    item.profit = task_profit(task)
     return item
 
 

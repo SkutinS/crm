@@ -99,6 +99,11 @@ export interface Participation {
   user: User
 }
 
+export interface TaskGroupRef {
+  id: number
+  name: string
+}
+
 export interface TaskListItem {
   id: number
   title: string
@@ -106,7 +111,9 @@ export interface TaskListItem {
   client: Client
   stage: TaskStage
   assignments: TaskAssignment[]
+  group: TaskGroupRef | null
   invoice_total: string
+  profit: string
 }
 
 export interface TaskDetail {
@@ -117,6 +124,7 @@ export interface TaskDetail {
   client: Client
   stage: TaskStage
   assignments: TaskAssignment[]
+  group: TaskGroupRef | null
   works: Work[]
   parts: Part[]
   expenses: MoneyItem[]
@@ -190,4 +198,36 @@ export interface CashJournalEntry {
 export interface CashSummary {
   balance: string
   entries: CashJournalEntry[]
+}
+
+export interface TaskGroupListItem {
+  id: number
+  name: string
+  created_at: string
+}
+
+export interface TaskGroupTaskItem {
+  id: number
+  title: string
+  created_at: string
+  client: Client
+  stage: TaskStage
+  invoice_total: string
+}
+
+export interface TaskGroupSummary {
+  invoice_total: string
+  debt_total: string
+  expenses_total: string
+  incomes_total: string
+  salary_total: string
+  profit_total: string
+}
+
+export interface TaskGroupDetail {
+  id: number
+  name: string
+  created_at: string
+  tasks: TaskGroupTaskItem[]
+  summary: TaskGroupSummary
 }

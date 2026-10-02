@@ -8,6 +8,7 @@ import { ClientsPage } from './pages/ClientsPage'
 import { LoginPage } from './pages/LoginPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { TaskDetailPage } from './pages/TaskDetailPage'
+import { TaskGroupDetailPage } from './pages/TaskGroupDetailPage'
 import { TasksListPage } from './pages/TasksListPage'
 import { UsersPage } from './pages/UsersPage'
 
@@ -32,6 +33,16 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <TaskDetailPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/task-groups/:id"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <TaskGroupDetailPage />
             </Layout>
           </ProtectedRoute>
         }
